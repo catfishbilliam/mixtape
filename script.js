@@ -19,14 +19,14 @@ const playlists = {
 const fallbackPlaylist = '37i9dQZF1DX0XUsuxWHRQd';
 
 function loginWithSpotify() {
-  const authURL =
-    'https://accounts.spotify.com/authorize' +
-    '?response_type=token' +
-    `&client_id=${encodeURIComponent(clientId)}` +
-    `&scope=${encodeURIComponent(scopes.join(' '))}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}`;
-  window.location = authURL;
-}
+    const authURL =
+      'https://accounts.spotify.com/authorize' +
+      '?response_type=token' +
+      `&client_id=${encodeURIComponent(clientId)}` +
+      `&scope=${encodeURIComponent(scopes.join(' '))}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    window.location = authURL;
+  }
 
 function getAccessTokenFromUrl() {
   const hash = window.location.hash;
