@@ -137,174 +137,175 @@ app.get('/api/search-playlist', async (req, res) => {
 });
 
 app.post('/api/create-mood-playlist', async (req, res) => {
-  const token = getSpotifyToken(req);
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
-  const freeText = (req.body.mood || '').trim();
-  if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
-
-  try {
-    const allMoodsRes = await axios.get(
-      'https://api.spotify.com/v1/browse/categories/mood/playlists',
-      {
-        params: { country: 'US', limit: 50 },
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
-    const moodPlaylists = allMoodsRes.data.playlists.items;
-    const pick = moodPlaylists.find(p =>
-      p.name.toLowerCase().includes(freeText.toLowerCase())
-    );
-    if (pick) {
-      return res.json({ playlistId: pick.id });
-    }
-  } catch (_) {}
-
-  const sentimentResult = sentiment.analyze(freeText);
-  const score = sentimentResult.score;
-  const nouns = nlp(freeText).nouns().out('array');
-
-  let extractedSeeds = nouns
-    .map(w => w.toLowerCase().replace(/\s+/g, '-'))
-    .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
-    .slice(0, 2);
-  let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
-  let seedArtists = '';
-  let seedTracks = '';
-
-  if (!seedGenres) {
+    const token = getSpotifyToken(req);
+    if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  
+    const freeText = (req.body.mood || '').trim();
+    if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
+  
     try {
-      const topTracksRes = await axios.get(
-        'https://api.spotify.com/v1/me/top/tracks?limit=5',
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const artistIds = topTracksRes.data.items
-        .map(t => t.artists[0].id)
-        .slice(0, 2);
-      seedArtists = artistIds.join(',');
-    } catch (_) {
-      seedArtists = '';
-    }
-  }
-
-  if (!seedGenres && !seedArtists) {
-    try {
-      const topTracksRes = await axios.get(
-        'https://api.spotify.com/v1/me/top/tracks?limit=5',
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      seedTracks = topTracksRes.data.items
-        .map(t => t.id)
-        .slice(0, 3)
-        .join(',');
-    } catch (_) {
-      seedTracks = '';
-    }
-  }
-
-  let targetValence, targetEnergy;
-  if (score >= 3) {
-    targetValence = 0.9; targetEnergy = 0.9;
-  } else if (score > 0) {
-    targetValence = 0.7; targetEnergy = 0.6;
-  } else if (score === 0) {
-    targetValence = 0.5; targetEnergy = 0.4;
-  } else if (score < 0 && score >= -2) {
-    targetValence = 0.3; targetEnergy = 0.3;
-  } else {
-    targetValence = 0.1; targetEnergy = 0.2;
-  }
-
-  console.log('→ Mood handler:', { freeText, seedGenres, seedArtists, seedTracks, targetValence, targetEnergy });
-
-  let trackUris = [];
-  try {
-    const recParams = new URLSearchParams({
-      limit: '20',
-      target_valence: String(targetValence),
-      target_energy: String(targetEnergy),
-      target_danceability: '0.6',
-      min_popularity: '50'
-    });
-    if (seedGenres) recParams.set('seed_genres', seedGenres);
-    else if (seedArtists) recParams.set('seed_artists', seedArtists);
-    else if (seedTracks) recParams.set('seed_tracks', seedTracks);
-
-    const recRes = await axios.get(
-      `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const tracks = recRes.data.tracks || [];
-    trackUris = tracks.map(t => t.uri);
-    console.log('→ Recommendations count:', trackUris.length);
-  } catch (err) {
-    console.warn('→ Recommendations failed (fallback to search):', err.response?.status);
-    trackUris = [];
-  }
-
-  if (trackUris.length === 0) {
-    console.log('→ Falling back to search-playlist for:', freeText);
-    try {
-      const spRes = await axios.get(
-        'https://api.spotify.com/v1/search',
+      const allMoodsRes = await axios.get(
+        'https://api.spotify.com/v1/browse/categories/mood/playlists',
         {
-          params: { q: freeText, type: 'playlist', limit: 1 },
+          params: { country: 'US', limit: 50 },
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      const playlists = spRes?.data?.playlists;
-      if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
-        console.log('→ Fallback playlist ID:', playlists.items[0].id);
-        return res.json({ playlistId: playlists.items[0].id });
+      const moodPlaylists = allMoodsRes.data.playlists.items;
+      const pick = moodPlaylists.find(p =>
+        p.name.toLowerCase().includes(freeText.toLowerCase())
+      );
+      if (pick) {
+        return res.json({ playlistId: pick.id });
       }
-      return res.status(404).json({ error: 'no_playlist_found' });
+    } catch (_) {}
+  
+    const sentimentResult = sentiment.analyze(freeText);
+    const score = sentimentResult.score;
+    const nouns = nlp(freeText).nouns().out('array');
+  
+    let extractedSeeds = nouns
+      .map(w => w.toLowerCase().replace(/\s+/g, '-'))
+      .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
+      .slice(0, 2);
+    let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
+    let seedArtists = '';
+    let seedTracks = '';
+  
+    if (!seedGenres) {
+      try {
+        const topTracksRes = await axios.get(
+          'https://api.spotify.com/v1/me/top/tracks?limit=5',
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const artistIds = topTracksRes.data.items
+          .map(t => t.artists[0].id)
+          .slice(0, 2);
+        seedArtists = artistIds.join(',');
+      } catch (_) {
+        seedArtists = '';
+      }
+    }
+  
+    if (!seedGenres && !seedArtists) {
+      try {
+        const topTracksRes = await axios.get(
+          'https://api.spotify.com/v1/me/top/tracks?limit=5',
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        seedTracks = topTracksRes.data.items
+          .map(t => t.id)
+          .slice(0, 3)
+          .join(',');
+      } catch (_) {
+        seedTracks = '';
+      }
+    }
+  
+    let targetValence, targetEnergy;
+    if (score >= 3) {
+      targetValence = 0.9; targetEnergy = 0.9;
+    } else if (score > 0) {
+      targetValence = 0.7; targetEnergy = 0.6;
+    } else if (score === 0) {
+      targetValence = 0.5; targetEnergy = 0.4;
+    } else if (score < 0 && score >= -2) {
+      targetValence = 0.3; targetEnergy = 0.3;
+    } else {
+      targetValence = 0.1; targetEnergy = 0.2;
+    }
+  
+    console.log('→ Mood handler:', { freeText, seedGenres, seedArtists, seedTracks, targetValence, targetEnergy });
+  
+    let trackUris = [];
+    try {
+      const recParams = new URLSearchParams({
+        limit: '20',
+        target_valence: String(targetValence),
+        target_energy: String(targetEnergy),
+        target_danceability: '0.6',
+        min_popularity: '50'
+      });
+      if (seedGenres) recParams.set('seed_genres', seedGenres);
+      else if (seedArtists) recParams.set('seed_artists', seedArtists);
+      else if (seedTracks) recParams.set('seed_tracks', seedTracks);
+  
+      const recRes = await axios.get(
+        `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const tracks = recRes.data.tracks || [];
+      trackUris = tracks.map(t => t.uri);
+      console.log('→ Recommendations count:', trackUris.length);
     } catch (err) {
-      console.error('→ Fallback search failed:', err.response?.status, err.response?.data || err.message);
+      console.warn('→ Recommendations failed (fallback to search):', err.response?.status);
+      trackUris = [];
+    }
+  
+    if (trackUris.length === 0) {
+      console.log('→ Falling back to search-playlist for:', freeText);
+      try {
+        const spRes = await axios.get(
+          'https://api.spotify.com/v1/search',
+          {
+            params: { q: freeText, type: 'playlist', limit: 1 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const playlists = spRes?.data?.playlists;
+        if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
+          console.log('→ Fallback playlist ID:', playlists.items[0].id);
+          return res.json({ playlistId: playlists.items[0].id });
+        }
+        return res.status(404).json({ error: 'no_playlist_found' });
+      } catch (err) {
+        console.error('→ Fallback search failed:', err.response?.status, err.response?.data || err.message);
+        return res.status(500).json({ error: 'server_error' });
+      }
+    }
+  
+    try {
+      const meRes = await axios.get(
+        'https://api.spotify.com/v1/me',
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const userId = meRes.data.id;
+      console.log('→ Creating playlist for user:', userId);
+  
+      const createRes = await axios.post(
+        `https://api.spotify.com/v1/users/${userId}/playlists`,
+        {
+          name: `Mixtape - ${freeText}`,
+          description: `Your ${freeText} playlist`,
+          public: false
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      const newPlaylistId = createRes.data.id;
+      console.log('→ New playlist ID:', newPlaylistId);
+  
+      await axios.post(
+        `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
+        { uris: trackUris },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+  
+      return res.json({ playlistId: newPlaylistId });
+    } catch (err) {
+      console.error('❌ Error in /api/create-mood-playlist:', err.response?.status, err.response?.data || err.message);
       return res.status(500).json({ error: 'server_error' });
     }
-  }
-
-  try {
-    const meRes = await axios.get(
-      'https://api.spotify.com/v1/me',
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const userId = meRes.data.id;
-    console.log('→ Creating playlist for user:', userId);
-
-    const createRes = await axios.post(
-      `https://api.spotify.com/v1/users/${userId}/playlists`,
-      {
-        name: `Mixtape - ${freeText}`,
-        description: `Your ${freeText} playlist`,
-        public: false
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    const newPlaylistId = createRes.data.id;
-    console.log('→ New playlist ID:', newPlaylistId);
-
-    await axios.post(
-      `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
-      { uris: trackUris },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    return res.json({ playlistId: newPlaylistId });
-  } catch (err) {
-    console.error('❌ Error in /api/create-mood-playlist:', err.response?.status, err.response?.data || err.message);
-    return res.status(500).json({ error: 'server_error' });
-  }
-});
+  });
 
 app.get('/logout', (req, res) => {
   res.clearCookie('spotify_token');
