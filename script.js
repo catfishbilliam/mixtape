@@ -50,15 +50,23 @@ async function exchangeCodeForToken(code) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString()
   });
+  if (!res.ok) {
+    console.error('Token exchange failed:', res.status, await res.text());
+    return null;
+  }
   const data = await res.json();
   return data.access_token;
 }
 
 async function getTopSeeds(token) {
+  if (!token) return [];
   const res = await fetch('https://api.spotify.com/v1/me/top/tracks?limit=5', {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error('Fetching top tracks failed:', res.status, await res.text());
+    return [];
+  }
   const data = await res.json();
   if (!data.items) return [];
   return data.items.map(item => item.artists[0].id);
@@ -70,7 +78,10 @@ async function getGenresForArtists(token, artistIds) {
   const res = await fetch(`https://api.spotify.com/v1/artists?ids=${chunk}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error('Fetching artist genres failed:', res.status, await res.text());
+    return [];
+  }
   const data = await res.json();
   if (!data.artists) return [];
   const genres = data.artists.reduce((acc, artist) => {
@@ -81,11 +92,15 @@ async function getGenresForArtists(token, artistIds) {
 }
 
 async function searchPlaylist(token, query) {
+  if (!token || !query) return null;
   const params = new URLSearchParams({ q: query, type: 'playlist', limit: 1 });
   const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.error('Playlist search failed:', res.status, await res.text());
+    return null;
+  }
   const data = await res.json();
   if (!data.playlists || !data.playlists.items.length) return null;
   return data.playlists.items[0].id;
@@ -113,8 +128,13 @@ window.addEventListener('load', async () => {
 
   if (code) {
     const token = await exchangeCodeForToken(code);
-    sessionStorage.setItem('spotify_token', token);
-    window.history.replaceState({}, document.title, redirectUri);
+    if (token) {
+      sessionStorage.setItem('spotify_token', token);
+      window.history.replaceState({}, document.title, redirectUri);
+    } else {
+      statusEl.textContent = 'Authentication failed. Please try again.';
+      return;
+    }
   }
 
   const accessToken = sessionStorage.getItem('spotify_token');
