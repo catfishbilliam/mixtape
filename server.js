@@ -1,3 +1,145 @@
+require('dotenv').config();
+const express = require('express');
+const axios = require('axios');
+const cookieParser = require('cookie-parser');
+const path = require('path');
+const Sentiment = require('sentiment');
+const nlp = require('compromise');
+
+const app = express();
+const sentiment = new Sentiment();
+
+const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+const APP_BASE_URL = process.env.APP_BASE_URL;
+
+let cachedSeedGenres = [];
+let seedGenresFetchTime = 0;
+const CACHE_DURATION_MS = 24 * 60 * 60 * 1000;
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(cookieParser());
+app.use(express.json());
+
+app.get('/login', (req, res) => {
+  const state = Math.random().toString(36).substring(2, 15);
+  const scope = 'playlist-read-private user-top-read playlist-modify-private playlist-modify-public';
+  const authURL = new URL('https://accounts.spotify.com/authorize');
+  authURL.searchParams.set('response_type', 'code');
+  authURL.searchParams.set('client_id', CLIENT_ID);
+  authURL.searchParams.set('scope', scope);
+  authURL.searchParams.set('redirect_uri', `${APP_BASE_URL}/callback`);
+  authURL.searchParams.set('state', state);
+  res.redirect(authURL.toString());
+});
+
+app.get('/callback', async (req, res) => {
+  const code = req.query.code || null;
+  if (!code) return res.redirect('/');
+  try {
+    const tokenRes = await axios({
+      method: 'post',
+      url: 'https://accounts.spotify.com/api/token',
+      data: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: `${APP_BASE_URL}/callback`,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET
+      }).toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const accessToken = tokenRes.data.access_token;
+    res.cookie('spotify_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 3600 * 1000
+    });
+    res.redirect('/');
+  } catch (err) {
+    console.error('Token exchange failed:', err.response?.data || err.message);
+    res.redirect('/');
+  }
+});
+
+function getSpotifyToken(req) {
+  return req.cookies.spotify_token || null;
+}
+
+async function loadSeedGenres(token) {
+  const now = Date.now();
+  if (now - seedGenresFetchTime < CACHE_DURATION_MS && cachedSeedGenres.length) {
+    return cachedSeedGenres;
+  }
+  try {
+    const res = await axios.get('https://api.spotify.com/v1/recommendations/available-genre-seeds', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    cachedSeedGenres = res.data.genres;
+    seedGenresFetchTime = now;
+    return cachedSeedGenres;
+  } catch (err) {
+    console.warn('Error loading seed genres:', err.response?.status);
+    return [];
+  }
+}
+
+app.get('/api/top-tracks', async (req, res) => {
+  const token = getSpotifyToken(req);
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const spRes = await axios({
+      method: 'get',
+      url: 'https://api.spotify.com/v1/me/top/tracks?limit=5',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    res.json(spRes.data);
+  } catch (err) {
+    const status = err.response ? err.response.status : 500;
+    const data = err.response ? err.response.data : { error: err.message };
+    res.status(status).json(data);
+  }
+});
+
+app.get('/api/artists', async (req, res) => {
+  const token = getSpotifyToken(req);
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  const ids = req.query.ids || '';
+  if (!ids) return res.status(400).json({ error: 'Missing artist IDs' });
+  try {
+    const spRes = await axios({
+      method: 'get',
+      url: `https://api.spotify.com/v1/artists?ids=${encodeURIComponent(ids)}`,
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    res.json(spRes.data);
+  } catch (err) {
+    const status = err.response ? err.response.status : 500;
+    const data = err.response ? err.response.data : { error: err.message };
+    res.status(status).json(data);
+  }
+});
+
+app.get('/api/search-playlist', async (req, res) => {
+  const token = getSpotifyToken(req);
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  const q = req.query.q || '';
+  if (!q) return res.status(400).json({ error: 'Missing search query' });
+  try {
+    const spRes = await axios({
+      method: 'get',
+      url: 'https://api.spotify.com/v1/search',
+      params: { q, type: 'playlist', limit: 1 },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    res.json(spRes.data);
+  } catch (err) {
+    const status = err.response ? err.response.status : 500;
+    const data = err.response ? err.response.data : { error: err.message };
+    res.status(status).json(data);
+  }
+});
+
 app.post('/api/create-mood-playlist', async (req, res) => {
   const token = getSpotifyToken(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
@@ -110,7 +252,9 @@ app.post('/api/create-mood-playlist', async (req, res) => {
           }).then(res => res.data).catch(() => null)
         );
         const detailedPlaylists = await Promise.all(playlistDetailsPromises);
-        const validDetails = detailedPlaylists.filter(p => p && p.followers && typeof p.followers.total === 'number');
+        const validDetails = detailedPlaylists.filter(
+          p => p && p.followers && typeof p.followers.total === 'number'
+        );
         if (validDetails.length > 0) {
           validDetails.sort((a, b) => b.followers.total - a.followers.total);
           const topPlaylist = validDetails[0];
@@ -160,4 +304,18 @@ app.post('/api/create-mood-playlist', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: 'server_error' });
   }
+});
+
+app.get('/logout', (req, res) => {
+  res.clearCookie('spotify_token');
+  res.redirect('/');
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

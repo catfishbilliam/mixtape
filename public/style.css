@@ -67,7 +67,7 @@ body.sonder       { background: #34495E; }
    HEADER & STATUS
 ------------------------------------------- */
 h1 {
-  font-size: 1.75rem;
+  font-size: 32px;
   margin-bottom: 1rem;
   color: white;
 }
