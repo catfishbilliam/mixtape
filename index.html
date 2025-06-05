@@ -3,35 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Auto-DJ: Weather + Time + Spotify</title>
+  <title>Mixtape: Mood-Based Playlist</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="container">
-    <h1>🎧 Auto-DJ</h1>
-    <p id="status">Loading your perfect playlist...</p>
+    <h1>🎶 Mixtape</h1>
+    <p id="status">Loading…</p>
+    <button id="login-btn" style="display:none;">Login with Spotify</button>
 
-    <div id="overrides">
-      <button data-playlist="37i9dQZF1DX0XUsuxWHRQd" data-visual="sunny">
-        ☀️ Clear Mix
-      </button>
-      <button data-playlist="37i9dQZF1DWYs83FtTMQFw" data-visual="rainy">
-        🌧 Rainy Mix
-      </button>
-      <button data-playlist="37i9dQZF1DXbITWG2g5ZJKYt" data-visual="snowy">
-        ❄️ Snowy Mix
-      </button>
-      <button data-playlist="37i9dQZF1DXctWG2g5ZGb8" data-visual="night">
-        🌙 Night Mix
-      </button>
-      <button data-playlist="37i9dQZF1DWTJ7xPn4vNaz" data-visual="party">
-        🎉 Party Mix
-      </button>
+    <div id="search-container" style="display:none;">
+      <form id="mood-form">
+        <input type="text" id="mood-input" placeholder="Type your mood (e.g., ‘chill’, ‘upbeat’)" required />
+        <button type="submit">Generate Playlist</button>
+      </form>
     </div>
 
     <div id="player"></div>
-
-    <button id="login-btn" style="display: none;">Login with Spotify</button>
   </div>
 
   <script src="script.js"></script>

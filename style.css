@@ -1,5 +1,5 @@
 /* -------------------------------------------
-   BASIC RESET & LAYOUT
+   RESET & BASE STYLING
 ------------------------------------------- */
 * {
     margin: 0;
@@ -8,69 +8,41 @@
   }
   
   body {
-    font-family: Arial, Helvetica, sans-serif;
-    background: #121212;
-    color: #ffffff;
-    text-align: center;
-    overflow-x: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0e0e0e;
+    color: #e5e5e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 100vh;
-    position: relative;
-  }
-  
-  .container {
-    max-width: 600px;
-    margin: 2rem auto;
-    padding: 0 1rem;
   }
   
   /* -------------------------------------------
-     HEADINGS & STATUS
+     CONTAINER CARD
+  ------------------------------------------- */
+  .container {
+    background: #1f1f1f;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    width: 100%;
+    max-width: 480px;
+    padding: 2rem 1.5rem;
+    text-align: center;
+  }
+  
+  /* -------------------------------------------
+     HEADER & STATUS
   ------------------------------------------- */
   h1 {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
+    font-size: 1.75rem;
+    margin-bottom: 1rem;
+    color: #1db954;
   }
   
   #status {
-    margin-bottom: 1rem;
-    font-size: 1.1rem;
-  }
-  
-  /* -------------------------------------------
-     MANUAL OVERRIDE BUTTONS
-  ------------------------------------------- */
-  #overrides {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
     margin-bottom: 1.5rem;
-  }
-  
-  #overrides button {
-    background: #1db954;
-    border: none;
-    border-radius: 20px;
-    color: #ffffff;
-    font-size: 0.9rem;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  
-  #overrides button:hover {
-    background: #1ed760;
-  }
-  
-  /* -------------------------------------------
-     SPOTIFY PLAYER EMBED
-  ------------------------------------------- */
-  #player iframe {
-    width: 100%;
-    height: 380px;
-    border: none;
-    border-radius: 8px;
-    margin-bottom: 1rem;
+    font-size: 1rem;
+    color: #bbbbbb;
   }
   
   /* -------------------------------------------
@@ -79,83 +51,107 @@
   #login-btn {
     background: #1db954;
     border: none;
-    border-radius: 20px;
+    border-radius: 50px;
     color: #ffffff;
     font-size: 1rem;
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 2rem;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.1s;
+    margin-bottom: 1.5rem;
   }
   
   #login-btn:hover {
     background: #1ed760;
+    transform: translateY(-2px);
+  }
+  
+  #login-btn:active {
+    transform: translateY(0);
   }
   
   /* -------------------------------------------
-     VISUAL EFFECTS
+     SEARCH FORM
   ------------------------------------------- */
-  /* SUNNY (CLEAR DAY) */
-  body.sunny {
-    background: linear-gradient(to bottom, #fceabb, #f8b500);
+  #search-container {
+    margin-bottom: 1.5rem;
   }
   
-  /* RAINY */
-  body.rainy {
-    background: #2c3e50;
+  #mood-form {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+  
+  #mood-input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: 2px solid #333;
+    border-radius: 50px;
+    background: #2b2b2b;
+    color: #e5e5e5;
+    font-size: 0.95rem;
+    transition: border-color 0.2s;
+  }
+  
+  #mood-input:focus {
+    outline: none;
+    border-color: #1db954;
+  }
+  
+  #mood-form button {
+    background: #1db954;
+    border: none;
+    border-radius: 50px;
+    color: #ffffff;
+    font-size: 0.95rem;
+    padding: 0 1.5rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  
+  #mood-form button:hover {
+    background: #1ed760;
+    transform: translateY(-2px);
+  }
+  
+  #mood-form button:active {
+    transform: translateY(0);
+  }
+  
+  /* -------------------------------------------
+     SPOTIFY PLAYER EMBED
+  ------------------------------------------- */
+  #player {
+    margin-top: 1.5rem;
+    border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   }
   
-  .raindrop {
-    position: absolute;
-    top: -20px;
-    width: 2px;
-    background: rgba(173, 216, 230, 0.7);
-    animation: fallRain linear infinite;
+  #player iframe {
+    width: 100%;
+    height: 380px;
+    border: none;
   }
   
-  @keyframes fallRain {
-    to {
-      transform: translateY(100vh);
+  /* -------------------------------------------
+     RESPONSIVE ADJUSTMENTS
+  ------------------------------------------- */
+  @media (max-width: 420px) {
+    .container {
+      padding: 1.5rem 1rem;
     }
-  }
-  
-  /* SNOWY */
-  body.snowy {
-    background: #1b1b1b;
-    overflow: hidden;
-  }
-  
-  .snowflake {
-    position: absolute;
-    top: -10px;
-    background: white;
-    border-radius: 50%;
-    opacity: 0.8;
-    animation: fallSnow linear infinite;
-  }
-  
-  @keyframes fallSnow {
-    to {
-      transform: translateY(100vh);
+    h1 {
+      font-size: 1.5rem;
     }
-  }
-  
-  /* NIGHT */
-  body.night {
-    background: #0d0d0d;
-  }
-  
-  /* PARTY */
-  body.party {
-    background: radial-gradient(circle, #ff4b1f 0%, #1fddff 100%);
-  }
-  
-  /* OPTIONAL: STYLE OVERRIDES FOR SCROLLBAR (RAIN/SNOW) */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
+    #status {
+      font-size: 0.9rem;
+    }
+    #mood-input, #mood-form button {
+      font-size: 0.9rem;
+      padding: 0.6rem 0.8rem;
+    }
+    #player iframe {
+      height: 300px;
+    }
   }
