@@ -1,6 +1,5 @@
 const clientId = 'f9293119782449e88cb8da46afe19753';
 const redirectUri = 'https://catfishbilliam.github.io/mixtape/';
-const scopes = ['playlist-read-private'];
 
 const lat = 39.4143;
 const lon = -77.4105;
@@ -18,21 +17,58 @@ const playlists = {
 
 const fallbackPlaylist = '37i9dQZF1DX0XUsuxWHRQd';
 
-function loginWithSpotify() {
-    const authURL =
-      'https://accounts.spotify.com/authorize' +
-      '?response_type=token' +
-      `&client_id=${encodeURIComponent(clientId)}` +
-      `&scope=${encodeURIComponent(scopes.join(' '))}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}`;
-    window.location = authURL;
-  }
+function generateCodeVerifier() {
+  const array = new Uint32Array(56);
+  window.crypto.getRandomValues(array);
+  return Array.from(array).map(n => ('00000000' + n.toString(16)).slice(-8)).join('');
+}
 
-function getAccessTokenFromUrl() {
-  const hash = window.location.hash;
-  if (!hash) return null;
-  const params = new URLSearchParams(hash.substring(1));
-  return params.get('access_token');
+async function generateCodeChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await window.crypto.subtle.digest('SHA-256', data);
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return base64;
+}
+
+function redirectToSpotify() {
+  const verifier = generateCodeVerifier();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  generateCodeChallenge(verifier).then(challenge => {
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      scope: 'playlist-read-private',
+      redirect_uri: redirectUri,
+      code_challenge_method: 'S256',
+      code_challenge: challenge
+    });
+    window.location = `https://accounts.spotify.com/authorize?${params}`;
+  });
+}
+
+function parseQueryParams() {
+  return new URLSearchParams(window.location.search);
+}
+
+async function exchangeCodeForToken(code) {
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: redirectUri,
+    client_id: clientId,
+    code_verifier: verifier
+  });
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString()
+  });
+  const data = await res.json();
+  return data.access_token;
 }
 
 function getSeason(month) {
@@ -53,8 +89,7 @@ function mapConditionToKey(condText) {
   const txt = condText.toLowerCase();
   if (txt.includes('rain')) return 'rain';
   if (txt.includes('snow')) return 'snow';
-  if (txt.includes('fog') || txt.includes('mist') || txt.includes('haze'))
-    return 'rain';
+  if (txt.includes('fog') || txt.includes('mist') || txt.includes('haze')) return 'rain';
   return 'clear';
 }
 
@@ -66,20 +101,13 @@ function getVisualClass(timeOfDay, weatherKey) {
 }
 
 function clearVisuals() {
-  document.body.classList.remove(
-    'rainy',
-    'snowy',
-    'sunny',
-    'night',
-    'party'
-  );
+  document.body.classList.remove('rainy', 'snowy', 'sunny', 'night', 'party');
   document.querySelectorAll('.raindrop, .snowflake').forEach(el => el.remove());
 }
 
 function setVisualEffects(vis) {
   clearVisuals();
   document.body.classList.add(vis);
-
   if (vis === 'rainy') {
     for (let i = 0; i < 100; i++) {
       const drop = document.createElement('div');
@@ -108,21 +136,17 @@ function setVisualEffects(vis) {
 }
 
 async function fetchGridpoint() {
-  const url = `https://api.weather.gov/points/${lat},${lon}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch gridpoint');
+  const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
   const data = await res.json();
   return {
     gridId: data.properties.gridId,
     gridX: data.properties.gridX,
-    gridY: data.properties.gridY,
+    gridY: data.properties.gridY
   };
 }
 
 async function fetchLatestCondition(gridId, gridX, gridY) {
-  const url = `https://api.weather.gov/gridpoints/${gridId}/${gridX},${gridY}/observations`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch observations');
+  const res = await fetch(`https://api.weather.gov/gridpoints/${gridId}/${gridX},${gridY}/observations`);
   const data = await res.json();
   const latest = data.features[0].properties.textDescription;
   return latest || 'Clear';
@@ -133,7 +157,7 @@ async function getWeatherKey() {
     const { gridId, gridX, gridY } = await fetchGridpoint();
     const rawCond = await fetchLatestCondition(gridId, gridX, gridY);
     return mapConditionToKey(rawCond);
-  } catch (err) {
+  } catch {
     return 'clear';
   }
 }
@@ -147,15 +171,41 @@ function embedPlaylist(playlistId) {
   container.appendChild(iframe);
 }
 
+function setupOverrideButtons() {
+  document.querySelectorAll('#overrides button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pid = btn.getAttribute('data-playlist');
+      const vis = btn.getAttribute('data-visual');
+      const label = btn.textContent;
+      document.getElementById('status').textContent = 'Override → ' + label;
+      embedPlaylist(pid);
+      clearVisuals();
+      document.body.classList.add(vis);
+      if (vis === 'rainy') setVisualEffects('rainy');
+      if (vis === 'snowy') setVisualEffects('snowy');
+      if (vis === 'sunny') setVisualEffects('sunny');
+      if (vis === 'night') setVisualEffects('night');
+      if (vis === 'party') setVisualEffects('party');
+    });
+  });
+}
+
 window.addEventListener('load', async () => {
-  const accessToken = getAccessTokenFromUrl();
+  const params = parseQueryParams();
+  const code = params.get('code');
   const statusEl = document.getElementById('status');
+  if (code) {
+    const token = await exchangeCodeForToken(code);
+    sessionStorage.setItem('spotify_token', token);
+    window.history.replaceState({}, document.title, redirectUri);
+  }
+  const accessToken = sessionStorage.getItem('spotify_token');
   const loginBtn = document.getElementById('login-btn');
 
   if (!accessToken) {
     statusEl.textContent = 'Please log in with Spotify to start your mix.';
     loginBtn.style.display = 'inline-block';
-    loginBtn.addEventListener('click', loginWithSpotify);
+    loginBtn.addEventListener('click', redirectToSpotify);
     setupOverrideButtons();
     return;
   }
@@ -181,25 +231,3 @@ window.addEventListener('load', async () => {
 
   setupOverrideButtons();
 });
-
-function setupOverrideButtons() {
-  document.querySelectorAll('#overrides button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const pid = btn.getAttribute('data-playlist');
-      const vis = btn.getAttribute('data-visual');
-      const label = btn.textContent;
-
-      document.getElementById('status').textContent = 'Override → ' + label;
-
-      embedPlaylist(pid);
-
-      clearVisuals();
-      document.body.classList.add(vis);
-      if (vis === 'rainy') setVisualEffects('rainy');
-      if (vis === 'snowy') setVisualEffects('snowy');
-      if (vis === 'sunny') setVisualEffects('sunny');
-      if (vis === 'night') setVisualEffects('night');
-      if (vis === 'party') setVisualEffects('party');
-    });
-  });
-}
