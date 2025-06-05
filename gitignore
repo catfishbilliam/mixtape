@@ -1,1 +1,19 @@
+# dependencies
 node_modules/
+
+# environment variables
+.env
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+
+# macOS filesystem files
+.DS_Store
+
+# optional: if you ever generate coverage reports/tests
+coverage/
+
+# optional editor/IDE folders
+.vscode/
+.idea/
