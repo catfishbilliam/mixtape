@@ -1,77 +1,28 @@
 const clientId = 'f9293119782449e88cb8da46afe19753';
 const redirectUri = 'https://catfishbilliam.github.io/mixtape/';
 
-function generateCodeVerifier() {
-  const array = new Uint32Array(56);
-  window.crypto.getRandomValues(array);
-  return Array.from(array).map(n => ('00000000' + n.toString(16)).slice(-8)).join('');
-}
-
-async function generateCodeChallenge(verifier) {
-  const data = new TextEncoder().encode(verifier);
-  const digest = await window.crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
 function redirectToSpotify() {
-  const verifier = generateCodeVerifier();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  generateCodeChallenge(verifier).then(challenge => {
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: clientId,
-      scope: 'playlist-read-private user-top-read',
-      redirect_uri: redirectUri,
-      code_challenge_method: 'S256',
-      code_challenge: challenge
-    });
-    window.location = `https://accounts.spotify.com/authorize?${params}`;
+  const params = new URLSearchParams({
+    response_type: 'token',
+    client_id: clientId,
+    scope: 'playlist-read-private user-top-read',
+    redirect_uri: redirectUri
   });
+  window.location = `https://accounts.spotify.com/authorize?${params}`;
 }
 
-function parseQueryParams() {
-  return new URLSearchParams(window.location.search);
+function getTokenFromHash() {
+  const hash = window.location.hash.substring(1); 
+  const parts = new URLSearchParams(hash);
+  return parts.get('access_token');
 }
-
-async function exchangeCodeForToken(code) {
-    const verifier = sessionStorage.getItem('pkce_verifier');
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-      code_verifier: verifier
-    });
-  
-    console.log('Sending token request:', body.toString());
-  
-    const res = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString()
-    });
-  
-    if (!res.ok) {
-      console.error('Token exchange failed:', res.status, await res.text());
-      return null;
-    }
-  
-    const data = await res.json();
-    return data.access_token;
-  }
 
 async function getTopSeeds(token) {
   if (!token) return [];
   const res = await fetch('https://api.spotify.com/v1/me/top/tracks?limit=5', {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) {
-    console.error('Fetching top tracks failed:', res.status, await res.text());
-    return [];
-  }
+  if (!res.ok) return [];
   const data = await res.json();
   if (!data.items) return [];
   return data.items.map(item => item.artists[0].id);
@@ -83,10 +34,7 @@ async function getGenresForArtists(token, artistIds) {
   const res = await fetch(`https://api.spotify.com/v1/artists?ids=${chunk}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) {
-    console.error('Fetching artist genres failed:', res.status, await res.text());
-    return [];
-  }
+  if (!res.ok) return [];
   const data = await res.json();
   if (!data.artists) return [];
   const genres = data.artists.reduce((acc, artist) => {
@@ -102,10 +50,7 @@ async function searchPlaylist(token, query) {
   const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) {
-    console.error('Playlist search failed:', res.status, await res.text());
-    return null;
-  }
+  if (!res.ok) return null;
   const data = await res.json();
   if (!data.playlists || !data.playlists.items.length) return null;
   return data.playlists.items[0].id;
@@ -125,21 +70,14 @@ function embedPlaylist(playlistId) {
 }
 
 window.addEventListener('load', async () => {
-  const params = parseQueryParams();
-  const code = params.get('code');
   const statusEl = document.getElementById('status');
   const loginBtn = document.getElementById('login-btn');
   const searchContainer = document.getElementById('search-container');
 
-  if (code) {
-    const token = await exchangeCodeForToken(code);
-    if (token) {
-      sessionStorage.setItem('spotify_token', token);
-      window.history.replaceState({}, document.title, redirectUri);
-    } else {
-      statusEl.textContent = 'Authentication failed. Please try again.';
-      return;
-    }
+  const token = getTokenFromHash();
+  if (token) {
+    sessionStorage.setItem('spotify_token', token);
+    window.history.replaceState({}, document.title, redirectUri);
   }
 
   const accessToken = sessionStorage.getItem('spotify_token');
