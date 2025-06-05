@@ -140,8 +140,17 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     const token = getSpotifyToken(req);
     if (!token) return res.status(401).json({ error: 'Not authenticated' });
     const freeText = (req.body.mood || '').trim();
-    const clientGenres = req.body.genres || [];
     if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
+  
+    let userGenres = [];
+    try {
+      const topArtistsRes = await axios.get('https://api.spotify.com/v1/me/top/artists?limit=10', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      userGenres = topArtistsRes.data.items.flatMap(a => a.genres).slice(0, 10);
+    } catch (_) {
+      userGenres = [];
+    }
   
     try {
       const allMoodsRes = await axios.get(
@@ -152,9 +161,10 @@ app.post('/api/create-mood-playlist', async (req, res) => {
         }
       );
       const moodPlaylists = allMoodsRes.data.playlists.items;
-      const pick = moodPlaylists.find(p =>
-        p.name.toLowerCase().includes(freeText.toLowerCase())
-      );
+      const pick = moodPlaylists.find(p => {
+        const lower = p.name.toLowerCase();
+        return lower.includes(freeText.toLowerCase()) || userGenres.some(g => lower.includes(g));
+      });
       if (pick) {
         return res.json({ playlistId: pick.id });
       }
@@ -168,14 +178,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       .map(w => w.toLowerCase().replace(/\s+/g, '-'))
       .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
       .slice(0, 2);
-  
-    if (extractedSeeds.length < 2 && Array.isArray(clientGenres)) {
-      extractedSeeds.push(...clientGenres
-        .map(w => w.toLowerCase().replace(/\s+/g, '-'))
-        .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
-        .slice(0, 2 - extractedSeeds.length));
-    }
-  
     let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
     let seedArtists = '';
     let seedTracks = '';
