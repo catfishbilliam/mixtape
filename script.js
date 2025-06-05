@@ -4,19 +4,6 @@ const redirectUri = 'https://catfishbilliam.github.io/mixtape/';
 const lat = 39.4143;
 const lon = -77.4105;
 
-const playlists = {
-  'spring_morning_clear': '37i9dQZF1DX0XUsuxWHRQd',
-  'spring_morning_rain':  '37i9dQZF1DWYs83FtTMQFw',
-  'summer_evening_clear': '37i9dQZF1DWTJ7xPn4vNaz',
-  'summer_evening_rain':  '37i9dQZF1DX0Mb8xNY2KS2',
-  'fall_night_clear':     '37i9dQZF1DXctWG2g5ZGb8',
-  'fall_night_rain':      '37i9dQZF1DWTkIwO27gT3g',
-  'winter_evening_snow':  '37i9dQZF1DXbITWG1ZJKYt',
-  'winter_evening_clear': '37i9dQZF1DWUzFXarNiofw',
-};
-
-const fallbackPlaylist = '37i9dQZF1DX0XUsuxWHRQd';
-
 function generateCodeVerifier() {
   const array = new Uint32Array(56);
   window.crypto.getRandomValues(array);
@@ -40,7 +27,7 @@ function redirectToSpotify() {
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
-      scope: 'playlist-read-private',
+      scope: 'playlist-read-private user-top-read',
       redirect_uri: redirectUri,
       code_challenge_method: 'S256',
       code_challenge: challenge
@@ -162,23 +149,56 @@ async function getWeatherKey() {
   }
 }
 
-function embedPlaylist(playlistId) {
+async function getTopSeeds(token) {
+  const res = await fetch('https://api.spotify.com/v1/me/top/tracks?limit=5', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  return data.items.map(item => item.id).join(',');
+}
+
+async function fetchMoodRecommendations(token, moodKey) {
+  const seedTracks = await getTopSeeds(token);
+  const params = new URLSearchParams({ seed_tracks: seedTracks, limit: 10 });
+  if (moodKey.includes('rain')) {
+    params.set('target_valence', 0.2);
+    params.set('target_danceability', 0.3);
+  } else if (moodKey.includes('snow')) {
+    params.set('target_valence', 0.1);
+    params.set('target_energy', 0.2);
+  } else if (moodKey.includes('night')) {
+    params.set('target_valence', 0.3);
+    params.set('target_danceability', 0.4);
+  } else {
+    params.set('target_valence', 0.8);
+    params.set('target_danceability', 0.6);
+  }
+  const url = `https://api.spotify.com/v1/recommendations?${params}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  return data.tracks.map(track => track.id);
+}
+
+function embedRecommendedTrack(trackId) {
   const container = document.getElementById('player');
   container.innerHTML = '';
   const iframe = document.createElement('iframe');
-  iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
+  iframe.src = `https://open.spotify.com/embed/track/${trackId}`;
   iframe.allow = 'encrypted-media';
   container.appendChild(iframe);
 }
 
-function setupOverrideButtons() {
+function setupOverrideButtons(token) {
   document.querySelectorAll('#overrides button').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const pid = btn.getAttribute('data-playlist');
       const vis = btn.getAttribute('data-visual');
       const label = btn.textContent;
       document.getElementById('status').textContent = 'Override → ' + label;
-      embedPlaylist(pid);
+      const trackIds = await fetchMoodRecommendations(token, label.toLowerCase());
+      embedRecommendedTrack(trackIds[0]);
       clearVisuals();
       document.body.classList.add(vis);
       if (vis === 'rainy') setVisualEffects('rainy');
@@ -206,7 +226,6 @@ window.addEventListener('load', async () => {
     statusEl.textContent = 'Please log in with Spotify to start your mix.';
     loginBtn.style.display = 'inline-block';
     loginBtn.addEventListener('click', redirectToSpotify);
-    setupOverrideButtons();
     return;
   }
 
@@ -218,16 +237,16 @@ window.addEventListener('load', async () => {
   const season = getSeason(month);
   const timeOfDay = getTimeOfDay(hour);
 
-  let weatherKey = await getWeatherKey();
+  const weatherKey = await getWeatherKey();
 
   const moodKey = `${season}_${timeOfDay}_${weatherKey}`;
-  let playlistId = playlists[moodKey] || fallbackPlaylist;
+  const trackIds = await fetchMoodRecommendations(accessToken, moodKey);
 
   statusEl.textContent = `Auto-DJ Mood: ${moodKey.replace(/_/g, ' ')}`;
-  embedPlaylist(playlistId);
+  embedRecommendedTrack(trackIds[0]);
 
   const visualClass = getVisualClass(timeOfDay, weatherKey);
   setVisualEffects(visualClass);
 
-  setupOverrideButtons();
+  setupOverrideButtons(accessToken);
 });
