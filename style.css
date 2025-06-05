@@ -1,0 +1,161 @@
+/* -------------------------------------------
+   BASIC RESET & LAYOUT
+------------------------------------------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #121212;
+    color: #ffffff;
+    text-align: center;
+    overflow-x: hidden;
+    min-height: 100vh;
+    position: relative;
+  }
+  
+  .container {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  
+  /* -------------------------------------------
+     HEADINGS & STATUS
+  ------------------------------------------- */
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  #status {
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+  
+  /* -------------------------------------------
+     MANUAL OVERRIDE BUTTONS
+  ------------------------------------------- */
+  #overrides {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  #overrides button {
+    background: #1db954;
+    border: none;
+    border-radius: 20px;
+    color: #ffffff;
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  #overrides button:hover {
+    background: #1ed760;
+  }
+  
+  /* -------------------------------------------
+     SPOTIFY PLAYER EMBED
+  ------------------------------------------- */
+  #player iframe {
+    width: 100%;
+    height: 380px;
+    border: none;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+  }
+  
+  /* -------------------------------------------
+     LOGIN BUTTON
+  ------------------------------------------- */
+  #login-btn {
+    background: #1db954;
+    border: none;
+    border-radius: 20px;
+    color: #ffffff;
+    font-size: 1rem;
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  #login-btn:hover {
+    background: #1ed760;
+  }
+  
+  /* -------------------------------------------
+     VISUAL EFFECTS
+  ------------------------------------------- */
+  /* SUNNY (CLEAR DAY) */
+  body.sunny {
+    background: linear-gradient(to bottom, #fceabb, #f8b500);
+  }
+  
+  /* RAINY */
+  body.rainy {
+    background: #2c3e50;
+    overflow: hidden;
+  }
+  
+  .raindrop {
+    position: absolute;
+    top: -20px;
+    width: 2px;
+    background: rgba(173, 216, 230, 0.7);
+    animation: fallRain linear infinite;
+  }
+  
+  @keyframes fallRain {
+    to {
+      transform: translateY(100vh);
+    }
+  }
+  
+  /* SNOWY */
+  body.snowy {
+    background: #1b1b1b;
+    overflow: hidden;
+  }
+  
+  .snowflake {
+    position: absolute;
+    top: -10px;
+    background: white;
+    border-radius: 50%;
+    opacity: 0.8;
+    animation: fallSnow linear infinite;
+  }
+  
+  @keyframes fallSnow {
+    to {
+      transform: translateY(100vh);
+    }
+  }
+  
+  /* NIGHT */
+  body.night {
+    background: #0d0d0d;
+  }
+  
+  /* PARTY */
+  body.party {
+    background: radial-gradient(circle, #ff4b1f 0%, #1fddff 100%);
+  }
+  
+  /* OPTIONAL: STYLE OVERRIDES FOR SCROLLBAR (RAIN/SNOW) */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+  }
