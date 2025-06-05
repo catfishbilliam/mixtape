@@ -37,26 +37,31 @@ function parseQueryParams() {
 }
 
 async function exchangeCodeForToken(code) {
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: redirectUri,
-    client_id: clientId,
-    code_verifier: verifier
-  });
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString()
-  });
-  if (!res.ok) {
-    console.error('Token exchange failed:', res.status, await res.text());
-    return null;
+    const verifier = sessionStorage.getItem('pkce_verifier');
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      code_verifier: verifier
+    });
+  
+    console.log('Sending token request:', body.toString());
+  
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+  
+    if (!res.ok) {
+      console.error('Token exchange failed:', res.status, await res.text());
+      return null;
+    }
+  
+    const data = await res.json();
+    return data.access_token;
   }
-  const data = await res.json();
-  return data.access_token;
-}
 
 async function getTopSeeds(token) {
   if (!token) return [];
