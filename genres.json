@@ -1,0 +1,242 @@
+[
+  {
+    "id": 1,
+    "name": "pop"
+  },
+  {
+    "id": 2,
+    "name": "dance"
+  },
+  {
+    "id": 3,
+    "name": "disco"
+  },
+  {
+    "id": 4,
+    "name": "blues"
+  },
+  {
+    "id": 5,
+    "name": "acoustic"
+  },
+  {
+    "id": 6,
+    "name": "soul"
+  },
+  {
+    "id": 7,
+    "name": "electronic"
+  },
+  {
+    "id": 8,
+    "name": "techno"
+  },
+  {
+    "id": 9,
+    "name": "hip hop"
+  },
+  {
+    "id": 10,
+    "name": "ambient"
+  },
+  {
+    "id": 11,
+    "name": "lo-fi"
+  },
+  {
+    "id": 12,
+    "name": "reggae"
+  },
+  {
+    "id": 13,
+    "name": "r&b"
+  },
+  {
+    "id": 14,
+    "name": "jazz"
+  },
+  {
+    "id": 15,
+    "name": "folk"
+  },
+  {
+    "id": 16,
+    "name": "indie folk"
+  },
+  {
+    "id": 17,
+    "name": "gospel"
+  },
+  {
+    "id": 18,
+    "name": "singer-songwriter"
+  },
+  {
+    "id": 19,
+    "name": "punk"
+  },
+  {
+    "id": 20,
+    "name": "metal"
+  },
+  {
+    "id": 21,
+    "name": "dream pop"
+  },
+  {
+    "id": 22,
+    "name": "shoegaze"
+  },
+  {
+    "id": 23,
+    "name": "folk rock"
+  },
+  {
+    "id": 24,
+    "name": "pop rock"
+  },
+  {
+    "id": 25,
+    "name": "punk rock"
+  },
+  {
+    "id": 26,
+    "name": "hardcore"
+  },
+  {
+    "id": 27,
+    "name": "alternative"
+  },
+  {
+    "id": 28,
+    "name": "indie rock"
+  },
+  {
+    "id": 29,
+    "name": "emo"
+  },
+  {
+    "id": 30,
+    "name": "post-punk"
+  },
+  {
+    "id": 31,
+    "name": "darkwave"
+  },
+  {
+    "id": 32,
+    "name": "vaporwave"
+  },
+  {
+    "id": 33,
+    "name": "trip hop"
+  },
+  {
+    "id": 34,
+    "name": "chillwave"
+  },
+  {
+    "id": 35,
+    "name": "downtempo"
+  },
+  {
+    "id": 36,
+    "name": "lo-fi hip hop"
+  },
+  {
+    "id": 37,
+    "name": "post-rock"
+  },
+  {
+    "id": 38,
+    "name": "synthpop"
+  },
+  {
+    "id": 39,
+    "name": "classical"
+  },
+  {
+    "id": 40,
+    "name": "orchestral"
+  },
+  {
+    "id": 41,
+    "name": "soundtrack"
+  },
+  {
+    "id": 42,
+    "name": "cinematic"
+  },
+  {
+    "id": 43,
+    "name": "electro swing"
+  },
+  {
+    "id": 44,
+    "name": "funk"
+  },
+  {
+    "id": 45,
+    "name": "house"
+  },
+  {
+    "id": 46,
+    "name": "deep house"
+  },
+  {
+    "id": 47,
+    "name": "progressive house"
+  },
+  {
+    "id": 48,
+    "name": "trance"
+  },
+  {
+    "id": 49,
+    "name": "drum and bass"
+  },
+  {
+    "id": 50,
+    "name": "dubstep"
+  },
+  {
+    "id": 51,
+    "name": "grime"
+  },
+  {
+    "id": 52,
+    "name": "breakbeat"
+  },
+  {
+    "id": 53,
+    "name": "ambient dub techno"
+  },
+  {
+    "id": 54,
+    "name": "krautrock"
+  },
+  {
+    "id": 55,
+    "name": "bluegrass"
+  },
+  {
+    "id": 56,
+    "name": "country"
+  },
+  {
+    "id": 57,
+    "name": "americana"
+  },
+  {
+    "id": 58,
+    "name": "latin"
+  },
+  {
+    "id": 59,
+    "name": "afrobeat"
+  },
+  {
+    "id": 60,
+    "name": "bossa nova"
+  }
+]
