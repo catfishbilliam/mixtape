@@ -212,10 +212,10 @@ app.post('/api/create-mood-playlist', async (req, res) => {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      const items = spRes?.data?.playlists?.items;
-      if (items && items.length > 0) {
-        console.log('→ Fallback playlist ID:', items[0].id);
-        return res.json({ playlistId: items[0].id });
+      const playlists = spRes?.data?.playlists;
+      if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
+        console.log('→ Fallback playlist ID:', playlists.items[0].id);
+        return res.json({ playlistId: playlists.items[0].id });
       }
       return res.status(404).json({ error: 'no_playlist_found' });
     } catch (err) {
