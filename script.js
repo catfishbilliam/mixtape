@@ -1,5 +1,5 @@
 const clientId = 'f9293119782449e88cb8da46afe19753';
-const redirectUri = 'http://localhost:5500/';
+const redirectUri = 'https://catfishbilliam.github.io/mixtape/';
 const scopes = ['playlist-read-private'];
 
 const lat = 39.4143;
