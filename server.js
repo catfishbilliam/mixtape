@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const Sentiment = require('sentiment');
 const nlp = require('compromise');
+const allGenres = require('./genres.json');
 
 const app = express();
 const sentiment = new Sentiment();
@@ -127,16 +128,30 @@ app.post('/api/create-mood-playlist', async (req, res) => {
   const sentimentResult = sentiment.analyze(freeText);
   const score = sentimentResult.score;
   const nouns = nlp(freeText).nouns().out('array');
-  const validGenres = new Set([
-    'pop','indie','rock','hip hop','electronic','classical','jazz','ambient','r&b','country'
-  ]);
+
+  const validGenres = new Set(allGenres.map(g => g.name.toLowerCase()));
+
   const extracted = nouns
     .map(w => w.toLowerCase())
     .filter(w => validGenres.has(w))
     .slice(0, 2);
+
   const seedGenres = extracted.length > 0 ? extracted.join(',') : 'pop,indie';
-  const targetValence = score > 2 ? 0.8 : score < -2 ? 0.2 : 0.5;
-  const targetEnergy = score > 2 ? 0.9 : score < -2 ? 0.3 : 0.5;
+
+  let targetValence, targetEnergy;
+  if (score >= 3) {
+    targetValence = 0.9; targetEnergy = 0.9;
+  } else if (score > 0) {
+    targetValence = 0.7; targetEnergy = 0.6;
+  } else if (score === 0) {
+    targetValence = 0.5; targetEnergy = 0.4;
+  } else if (score < 0 && score >= -2) {
+    targetValence = 0.3; targetEnergy = 0.3;
+  } else {
+    targetValence = 0.1; targetEnergy = 0.2;
+  }
+
+  console.log('→ Mood handler:', { freeText, seedGenres, targetValence, targetEnergy });
 
   try {
     const recParams = new URLSearchParams({
@@ -149,50 +164,66 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
+
     const tracks = recRes.data.tracks || [];
     const trackUris = tracks.map(t => t.uri);
+    console.log('→ Recommendations count:', trackUris.length);
+
     if (trackUris.length === 0) {
-      throw new Error('no_tracks_found');
+      console.log('→ No recommendations, falling back to search-playlist');
+      const spRes = await axios.get(
+        'https://api.spotify.com/v1/search',
+        {
+          params: { q: freeText, type: 'playlist', limit: 1 },
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      const items = spRes.data.playlists?.items || [];
+      if (items.length > 0) {
+        console.log('→ Fallback playlist ID:', items[0].id);
+        return res.json({ playlistId: items[0].id });
+      }
+      return res.status(404).json({ error: 'no_playlist_found' });
     }
 
-    const meRes = await axios.get('https://api.spotify.com/v1/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const meRes = await axios.get(
+      'https://api.spotify.com/v1/me',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     const userId = meRes.data.id;
+    console.log('→ Creating playlist for user:', userId);
 
     const createRes = await axios.post(
       `https://api.spotify.com/v1/users/${userId}/playlists`,
-      { name: `Mixtape - ${freeText}`, description: `Your ${freeText} playlist`, public: false },
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      {
+        name: `Mixtape - ${freeText}`,
+        description: `Your ${freeText} playlist`,
+        public: false
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
     );
     const newPlaylistId = createRes.data.id;
+    console.log('→ New playlist ID:', newPlaylistId);
 
     await axios.post(
       `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
       { uris: trackUris },
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
     );
 
     return res.json({ playlistId: newPlaylistId });
   } catch (err) {
-    if (err.message === 'no_tracks_found' || err.response?.status === 404) {
-      try {
-        const spRes = await axios.get(
-          'https://api.spotify.com/v1/search',
-          {
-            params: { q: freeText, type: 'playlist', limit: 1 },
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-        const items = spRes.data.playlists?.items || [];
-        if (items.length > 0) {
-          return res.json({ playlistId: items[0].id });
-        }
-        return res.status(404).json({ error: 'no_playlist_found' });
-      } catch {
-        return res.status(500).json({ error: 'server_error' });
-      }
-    }
+    console.error('❌ Error in /api/create-mood-playlist:', err.response?.status, err.response?.data || err.message);
     return res.status(500).json({ error: 'server_error' });
   }
 });
