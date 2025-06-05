@@ -3,40 +3,35 @@ const express = require('express');
 const axios = require('axios');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const Sentiment = require('sentiment');
+const nlp = require('compromise');
 
 const app = express();
+const sentiment = new Sentiment();
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const APP_BASE_URL = process.env.APP_BASE_URL; // e.g. https://my-heroku-app.herokuapp.com
+const APP_BASE_URL = process.env.APP_BASE_URL;
 
-// 1. Serve static front-end
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cookieParser());
+app.use(express.json());
 
-// 2. Step 1 of OAuth: redirect user to Spotify’s authorize endpoint
 app.get('/login', (req, res) => {
   const state = Math.random().toString(36).substring(2, 15);
-  const scope = 'playlist-read-private user-top-read';
+  const scope = 'playlist-read-private user-top-read playlist-modify-private playlist-modify-public';
   const authURL = new URL('https://accounts.spotify.com/authorize');
   authURL.searchParams.set('response_type', 'code');
   authURL.searchParams.set('client_id', CLIENT_ID);
   authURL.searchParams.set('scope', scope);
   authURL.searchParams.set('redirect_uri', `${APP_BASE_URL}/callback`);
   authURL.searchParams.set('state', state);
-
-  // (Optionally store state in a cookie; omitted for brevity)
   res.redirect(authURL.toString());
 });
 
-// 3. Step 2 of OAuth: Spotify redirects back here with ?code=<code>
 app.get('/callback', async (req, res) => {
   const code = req.query.code || null;
-  if (!code) {
-    return res.redirect('/');
-  }
-
-  // Exchange code for access token (and refresh token if needed)
+  if (!code) return res.redirect('/');
   try {
     const tokenRes = await axios({
       method: 'post',
@@ -48,39 +43,27 @@ app.get('/callback', async (req, res) => {
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET
       }).toString(),
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
-
     const accessToken = tokenRes.data.access_token;
-    // Optionally store refresh_token: tokenRes.data.refresh_token
-
-    // Set HTTP-only cookie so front-end can’t read it (server proxies calls)
     res.cookie('spotify_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 3600 * 1000 // 1 hour
+      maxAge: 3600 * 1000
     });
-
-    // Redirect back to front-end’s main page
     res.redirect('/');
-  } catch (err) {
-    console.error('Token exchange error:', err.response ? err.response.data : err.message);
+  } catch {
     res.redirect('/');
   }
 });
 
-// 4. Helper: get the stored token from the cookie
 function getSpotifyToken(req) {
   return req.cookies.spotify_token || null;
 }
 
-// 5. API: GET /api/top-tracks → proxied /v1/me/top/tracks
 app.get('/api/top-tracks', async (req, res) => {
   const token = getSpotifyToken(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
-
   try {
     const spRes = await axios({
       method: 'get',
@@ -95,14 +78,11 @@ app.get('/api/top-tracks', async (req, res) => {
   }
 });
 
-// 6. API: GET /api/artists?ids=<comma-separated-ids>
 app.get('/api/artists', async (req, res) => {
   const token = getSpotifyToken(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
-
   const ids = req.query.ids || '';
   if (!ids) return res.status(400).json({ error: 'Missing artist IDs' });
-
   try {
     const spRes = await axios({
       method: 'get',
@@ -117,18 +97,15 @@ app.get('/api/artists', async (req, res) => {
   }
 });
 
-// 7. API: GET /api/search-playlist?q=<query>
 app.get('/api/search-playlist', async (req, res) => {
   const token = getSpotifyToken(req);
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
-
   const q = req.query.q || '';
   if (!q) return res.status(400).json({ error: 'Missing search query' });
-
   try {
     const spRes = await axios({
       method: 'get',
-      url: `https://api.spotify.com/v1/search`,
+      url: 'https://api.spotify.com/v1/search',
       params: { q, type: 'playlist', limit: 1 },
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -140,21 +117,66 @@ app.get('/api/search-playlist', async (req, res) => {
   }
 });
 
-// … all your other routes above …
+app.post('/api/create-mood-playlist', async (req, res) => {
+  const token = getSpotifyToken(req);
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  const freeText = (req.body.mood || '').trim();
+  if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
 
-// 8. Catch-all: serve index.html for any other route (SPA)
+  const sentimentResult = sentiment.analyze(freeText);
+  const score = sentimentResult.score; 
+  const doc = nlp(freeText).nouns().out('array');
+  const seedGenres = doc.slice(0, 2).join(',') || 'pop,indie';
+
+  const targetValence = score > 2 ? 0.8 : score < -2 ? 0.2 : 0.5;
+  const targetEnergy = score > 2 ? 0.9 : score < -2 ? 0.3 : 0.5;
+
+  try {
+    const recParams = new URLSearchParams({
+      seed_genres: seedGenres,
+      limit: '20',
+      target_valence: String(targetValence),
+      target_energy: String(targetEnergy)
+    });
+    const recRes = await axios.get(
+      `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const trackUris = recRes.data.tracks.map(t => t.uri);
+
+    const meRes = await axios.get('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const userId = meRes.data.id;
+
+    const createRes = await axios.post(
+      `https://api.spotify.com/v1/users/${userId}/playlists`,
+      { name: `Mixtape - ${freeText}`, description: `Your ${freeText} playlist`, public: false },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    const newPlaylistId = createRes.data.id;
+
+    await axios.post(
+      `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
+      { uris: trackUris },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    res.json({ playlistId: newPlaylistId });
+  } catch {
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+app.get('/logout', (req, res) => {
+  res.clearCookie('spotify_token');
+  res.redirect('/');
+});
+
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public/index.html'));
-  });
-  
-  // 9. Logout endpoint: clear the Spotify token cookie
-  app.get('/logout', (req, res) => {
-    res.clearCookie('spotify_token');
-    res.redirect('/');
-  });
-  
-  // Only one listen() call at the very end:
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  res.sendFile(path.join(__dirname, 'public/index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

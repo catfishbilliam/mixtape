@@ -20,33 +20,30 @@ async function getGenresForArtists(artistIds) {
   return [...new Set(genres)].slice(0, 5);
 }
 
-async function searchPlaylist(query) {
-  if (!query) return null;
-  try {
-    const res = await fetch(`/api/search-playlist?q=${encodeURIComponent(query)}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const items = data?.playlists?.items;
-    if (!Array.isArray(items) || items.length === 0) return null;
-    const firstItem = items[0];
-    if (!firstItem || typeof firstItem !== 'object' || !firstItem.id) return null;
-    return firstItem.id;
-  } catch (err) {
-    return null;
-  }
+async function createMoodPlaylist(mood) {
+  const res = await fetch('/api/create-mood-playlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mood })
+  });
+  if (!res.ok) return null;
+  const { playlistId } = await res.json();
+  return playlistId;
 }
 
-function embedPlaylist(playlistId) {
-  const container = document.getElementById('player');
-  container.innerHTML = '';
-  if (!playlistId) return;
-  const iframe = document.createElement('iframe');
-  iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
-  iframe.allow = 'encrypted-media';
-  iframe.width = '100%';
-  iframe.height = '380';
-  iframe.frameBorder = '0';
-  container.appendChild(iframe);
+async function handleMoodSelection(mood) {
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'Building your custom playlist…';
+  updateBackground(mood);
+
+  const playlistId = await createMoodPlaylist(mood);
+  if (playlistId) {
+    embedPlaylist(playlistId);
+    statusEl.textContent = `Your “${mood}” playlist is ready`;
+  } else {
+    embedPlaylist(null);
+    statusEl.textContent = 'Could not build playlist. Try again.';
+  }
 }
 
 function clearVisuals() {
