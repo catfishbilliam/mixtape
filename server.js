@@ -303,18 +303,35 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     }
   }
 
-  // 3) Final fallback: search for a playlist by freeText
+  // 3) Final fallback: find the most popular playlist by searching
   if (trackUris.length === 0) {
     try {
-      const spRes = await axios.get(
+      // Search for up to 10 playlists matching the query
+      const searchRes = await axios.get(
         'https://api.spotify.com/v1/search',
         {
-          params: { q: freeText, type: 'playlist', limit: 1 },
+          params: { q: freeText, type: 'playlist', limit: 10 },
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      const playlists = spRes.data.playlists;
+      const playlists = searchRes.data.playlists;
       if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
+        // Fetch full details for each playlist to get followers count
+        const playlistDetailsPromises = playlists.items.map(p =>
+          axios.get(`https://api.spotify.com/v1/playlists/${p.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(res => res.data).catch(() => null)
+        );
+        const detailedPlaylists = await Promise.all(playlistDetailsPromises);
+        // Filter out any null fetches
+        const validDetails = detailedPlaylists.filter(p => p && p.followers && typeof p.followers.total === 'number');
+        if (validDetails.length > 0) {
+          // Select playlist with highest followers.total
+          validDetails.sort((a, b) => b.followers.total - a.followers.total);
+          const topPlaylist = validDetails[0];
+          return res.json({ playlistId: topPlaylist.id });
+        }
+        // If no detailed info, fall back to first result
         return res.json({ playlistId: playlists.items[0].id });
       }
       return res.status(404).json({ error: 'no_playlist_found' });
