@@ -1,4 +1,10 @@
 /* -------------------------------------------
+   IMPORT FUNKY GOOGLE FONTS
+------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap');
+
+/* -------------------------------------------
    RESET & BASE STYLING
 ------------------------------------------- */
 * {
@@ -9,7 +15,7 @@
 
 /* Base body styling and smooth background transitions */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Luckiest Guy', cursive;
   background: #0e0e0e;
   color: #e5e5e5;
   display: flex;
@@ -25,7 +31,7 @@ body.sad          { background: #073B4C; }
 body.energetic    { background: #EF476F; }
 body.chill        { background: #06D6A0; }
 body.romantic     { background: #FF5E5B; }
-body.naughty      { background: #8E44AD; }
+body.naughty      { background: #8E44AD; } 
 body.whimsical    { background: #F39C12; }
 body.melancholy   { background: #2C3E50; }
 body.hopeful      { background: #1ABC9C; }
@@ -63,7 +69,7 @@ body.sonder       { background: #34495E; }
 h1 {
   font-size: 1.75rem;
   margin-bottom: 1rem;
-  color: #1db954;
+  color: white;
 }
 
 #status {
@@ -76,7 +82,8 @@ h1 {
    LOGIN & LOGOUT BUTTONS
 ------------------------------------------- */
 button[id$="-btn"] {
-  background: #1db954;
+  font-family: 'Roboto Condensed', sans-serif;
+  background: blueviolet;
   border: none;
   border-radius: 50px;
   color: #ffffff;
@@ -88,7 +95,7 @@ button[id$="-btn"] {
 }
 
 button[id$="-btn"]:hover {
-  background: #1ed760;
+  background: purple;
   transform: translateY(-2px);
 }
 
@@ -126,7 +133,8 @@ button[id$="-btn"]:active {
 }
 
 #mood-form button {
-  background: #1db954;
+  font-family: 'Roboto Condensed', sans-serif;
+  background: blueviolet;
   border: none;
   border-radius: 50px;
   color: #ffffff;
@@ -137,82 +145,12 @@ button[id$="-btn"]:active {
 }
 
 #mood-form button:hover {
-  background: #1ed760;
+  background: purple;
   transform: translateY(-2px);
 }
 
 #mood-form button:active {
   transform: translateY(0);
-}
-
-/* -------------------------------------------
-   MOOD BUTTONS + TOOLTIP
-------------------------------------------- */
-#mood-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.mood-btn {
-  position: relative;
-  background: #555;
-  border: none;
-  border-radius: 50px;
-  color: #fff;
-  font-size: 0.9rem;
-  padding: 0.6rem 1rem;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
-}
-
-.mood-btn:hover {
-  background: #777;
-  transform: translateY(-2px);
-}
-
-.mood-btn:active {
-  transform: translateY(0);
-}
-
-/* Tooltip text (hidden by default) */
-.mood-btn .tooltip-text {
-  visibility: hidden;
-  opacity: 0;
-  width: 180px;
-  background-color: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  text-align: center;
-  border-radius: 6px;
-  padding: 0.5rem;
-  position: absolute;
-  z-index: 10;
-  bottom: 125%;
-  left: 50%;
-  transform: translateX(-50%);
-  transition: opacity 0.2s ease;
-  font-size: 0.85rem;
-  line-height: 1.2;
-}
-
-/* Tooltip arrow */
-.mood-btn .tooltip-text::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 6px;
-  border-style: solid;
-  border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
-}
-
-/* Show tooltip on hover */
-.mood-btn:hover .tooltip-text {
-  visibility: visible;
-  opacity: 1;
 }
 
 /* -------------------------------------------
@@ -308,8 +246,7 @@ body.snowy::-webkit-scrollbar-thumb {
     font-size: 0.9rem;
   }
   #mood-input,
-  #mood-form button,
-  .mood-btn {
+  #mood-form button {
     font-size: 0.9rem;
     padding: 0.6rem 0.8rem;
   }
