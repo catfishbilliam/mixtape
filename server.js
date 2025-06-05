@@ -146,11 +146,24 @@ app.post('/api/create-mood-playlist', async (req, res) => {
   const score = sentimentResult.score;
   const nouns = nlp(freeText).nouns().out('array');
 
-  const extractedSeeds = nouns
+  let extractedSeeds = nouns
     .map(w => w.toLowerCase().replace(/\s+/g, '-'))
     .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
     .slice(0, 2);
-  const seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : 'pop';
+  let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
+  let seedArtists = '';
+
+  if (!seedGenres) {
+    try {
+      const topTracksRes = await axios.get('https://api.spotify.com/v1/me/top/tracks?limit=5', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const artistIds = topTracksRes.data.items.map(t => t.artists[0].id).slice(0, 2);
+      seedArtists = artistIds.join(',');
+    } catch (err) {
+      seedArtists = '';
+    }
+  }
 
   let targetValence, targetEnergy;
   if (score >= 3) {
@@ -165,16 +178,18 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     targetValence = 0.1; targetEnergy = 0.2;
   }
 
-  console.log('→ Mood handler:', { freeText, seedGenres, targetValence, targetEnergy });
+  console.log('→ Mood handler:', { freeText, seedGenres, seedArtists, targetValence, targetEnergy });
 
   let trackUris = [];
   try {
     const recParams = new URLSearchParams({
-      seed_genres: seedGenres,
       limit: '20',
       target_valence: String(targetValence),
       target_energy: String(targetEnergy)
     });
+    if (seedGenres) recParams.set('seed_genres', seedGenres);
+    if (seedArtists) recParams.set('seed_artists', seedArtists);
+
     const recRes = await axios.get(
       `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -197,8 +212,8 @@ app.post('/api/create-mood-playlist', async (req, res) => {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      const items = spRes.data.playlists?.items || [];
-      if (items.length > 0) {
+      const items = spRes?.data?.playlists?.items;
+      if (items && items.length > 0) {
         console.log('→ Fallback playlist ID:', items[0].id);
         return res.json({ playlistId: items[0].id });
       }
