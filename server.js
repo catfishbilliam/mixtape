@@ -142,6 +142,23 @@ app.post('/api/create-mood-playlist', async (req, res) => {
   const freeText = (req.body.mood || '').trim();
   if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
 
+  try {
+    const allMoodsRes = await axios.get(
+      'https://api.spotify.com/v1/browse/categories/mood/playlists',
+      {
+        params: { country: 'US', limit: 50 },
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+    const moodPlaylists = allMoodsRes.data.playlists.items;
+    const pick = moodPlaylists.find(p =>
+      p.name.toLowerCase().includes(freeText.toLowerCase())
+    );
+    if (pick) {
+      return res.json({ playlistId: pick.id });
+    }
+  } catch (_) {}
+
   const sentimentResult = sentiment.analyze(freeText);
   const score = sentimentResult.score;
   const nouns = nlp(freeText).nouns().out('array');
@@ -152,16 +169,35 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     .slice(0, 2);
   let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
   let seedArtists = '';
+  let seedTracks = '';
 
   if (!seedGenres) {
     try {
-      const topTracksRes = await axios.get('https://api.spotify.com/v1/me/top/tracks?limit=5', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const artistIds = topTracksRes.data.items.map(t => t.artists[0].id).slice(0, 2);
+      const topTracksRes = await axios.get(
+        'https://api.spotify.com/v1/me/top/tracks?limit=5',
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const artistIds = topTracksRes.data.items
+        .map(t => t.artists[0].id)
+        .slice(0, 2);
       seedArtists = artistIds.join(',');
-    } catch (err) {
+    } catch (_) {
       seedArtists = '';
+    }
+  }
+
+  if (!seedGenres && !seedArtists) {
+    try {
+      const topTracksRes = await axios.get(
+        'https://api.spotify.com/v1/me/top/tracks?limit=5',
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      seedTracks = topTracksRes.data.items
+        .map(t => t.id)
+        .slice(0, 3)
+        .join(',');
+    } catch (_) {
+      seedTracks = '';
     }
   }
 
@@ -178,17 +214,20 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     targetValence = 0.1; targetEnergy = 0.2;
   }
 
-  console.log('→ Mood handler:', { freeText, seedGenres, seedArtists, targetValence, targetEnergy });
+  console.log('→ Mood handler:', { freeText, seedGenres, seedArtists, seedTracks, targetValence, targetEnergy });
 
   let trackUris = [];
   try {
     const recParams = new URLSearchParams({
       limit: '20',
       target_valence: String(targetValence),
-      target_energy: String(targetEnergy)
+      target_energy: String(targetEnergy),
+      target_danceability: '0.6',
+      min_popularity: '50'
     });
     if (seedGenres) recParams.set('seed_genres', seedGenres);
-    if (seedArtists) recParams.set('seed_artists', seedArtists);
+    else if (seedArtists) recParams.set('seed_artists', seedArtists);
+    else if (seedTracks) recParams.set('seed_tracks', seedTracks);
 
     const recRes = await axios.get(
       `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
