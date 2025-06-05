@@ -21,10 +21,12 @@ async function getGenresForArtists(artistIds) {
 }
 
 async function createMoodPlaylist(moodText) {
+  const topSeeds = await getTopSeeds();
+  const genres = await getGenresForArtists(topSeeds);
   const res = await fetch('/api/create-mood-playlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mood: moodText })
+    body: JSON.stringify({ mood: moodText, genres })
   });
   if (!res.ok) return null;
   const data = await res.json();
