@@ -142,20 +142,91 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     const freeText = (req.body.mood || '').trim();
     if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
   
+    // determine current season and time of day
+    const now = new Date();
+    const month = now.getMonth(); // 0 = Jan, 11 = Dec
+    let season;
+    if (month === 11 || month === 0 || month === 1) season = 'winter';
+    else if (month >= 2 && month <= 4) season = 'spring';
+    else if (month >= 5 && month <= 7) season = 'summer';
+    else season = 'fall';
+  
+    const hour = now.getHours();
+    let timeOfDay;
+    if (hour >= 5 && hour < 12) timeOfDay = 'morning';
+    else if (hour >= 12 && hour < 18) timeOfDay = 'afternoon';
+    else if (hour >= 18 && hour < 22) timeOfDay = 'evening';
+    else timeOfDay = 'night';
+  
     try {
       const allMoodsRes = await axios.get(
-        'https://api.spotify.com/v1/browse/categories/mood/playlists',
+        'https://api.spotify.com/v1/browse/categories',
         {
           params: { country: 'US', limit: 50 },
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      const moodPlaylists = allMoodsRes.data.playlists.items;
-      const pick = moodPlaylists.find(p =>
-        p.name.toLowerCase().includes(freeText.toLowerCase())
+      const categories = allMoodsRes.data.categories.items;
+      let matchedCategory = categories.find(c =>
+        c.name.toLowerCase().includes(freeText.toLowerCase()) &&
+        (c.name.toLowerCase().includes(season) || c.name.toLowerCase().includes(timeOfDay))
       );
-      if (pick) {
-        return res.json({ playlistId: pick.id });
+      if (!matchedCategory) {
+        matchedCategory = categories.find(c =>
+          c.name.toLowerCase().includes(freeText.toLowerCase())
+        );
+      }
+      if (matchedCategory) {
+        const playlistsRes = await axios.get(
+          `https://api.spotify.com/v1/browse/categories/${matchedCategory.id}/playlists`,
+          {
+            params: { country: 'US', limit: 1 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const items = playlistsRes.data.playlists.items;
+        if (items.length > 0) {
+          const playlistId = items[0].id;
+          const tracksRes = await axios.get(
+            `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const fetchedTracks = tracksRes.data.items || [];
+          const trackUris = fetchedTracks.map(item => item.track.uri).slice(0, 20);
+          if (trackUris.length > 0) {
+            const meRes = await axios.get(
+              'https://api.spotify.com/v1/me',
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const userId = meRes.data.id;
+            const createRes = await axios.post(
+              `https://api.spotify.com/v1/users/${userId}/playlists`,
+              {
+                name: `Mixtape - ${freeText}`,
+                description: `Your ${freeText} playlist`,
+                public: false
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+            const newPlaylistId = createRes.data.id;
+            await axios.post(
+              `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
+              { uris: trackUris },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+            return res.json({ playlistId: newPlaylistId });
+          }
+        }
       }
     } catch (_) {}
   
@@ -214,8 +285,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       targetValence = 0.1; targetEnergy = 0.2;
     }
   
-    console.log('→ Mood handler:', { freeText, seedGenres, seedArtists, seedTracks, targetValence, targetEnergy });
-  
     let trackUris = [];
     try {
       const recParams = new URLSearchParams({
@@ -235,53 +304,11 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       );
       const tracks = recRes.data.tracks || [];
       trackUris = tracks.map(t => t.uri);
-      console.log('→ Recommendations count:', trackUris.length);
-    } catch (err) {
-      console.warn('→ Recommendations failed:', err.response?.status);
+    } catch (_) {
       trackUris = [];
     }
   
     if (trackUris.length === 0) {
-      console.log('→ Falling back to category-based search for:', freeText);
-      try {
-        const categoriesRes = await axios.get(
-          'https://api.spotify.com/v1/browse/categories',
-          {
-            params: { country: 'US', limit: 50 },
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-        const categories = categoriesRes.data.categories.items;
-        const matchedCategory = categories.find(c =>
-          c.name.toLowerCase().includes(freeText.toLowerCase())
-        );
-        if (matchedCategory) {
-          const playlistsRes = await axios.get(
-            `https://api.spotify.com/v1/browse/categories/${matchedCategory.id}/playlists`,
-            {
-              params: { country: 'US', limit: 1 },
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-          const items = playlistsRes.data.playlists.items;
-          if (items.length > 0) {
-            const playlistId = items[0].id;
-            const tracksRes = await axios.get(
-              `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            const fetchedTracks = tracksRes.data.items || [];
-            trackUris = fetchedTracks.map(item => item.track.uri).slice(0, 20);
-          }
-        }
-      } catch (err) {
-        console.warn('→ Category-based search failed:', err.response?.status);
-        trackUris = [];
-      }
-    }
-  
-    if (trackUris.length === 0) {
-      console.log('→ Final fallback to playlist-search for:', freeText);
       try {
         const spRes = await axios.get(
           'https://api.spotify.com/v1/search',
@@ -292,12 +319,10 @@ app.post('/api/create-mood-playlist', async (req, res) => {
         );
         const playlists = spRes?.data?.playlists;
         if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
-          console.log('→ Fallback playlist ID:', playlists.items[0].id);
           return res.json({ playlistId: playlists.items[0].id });
         }
         return res.status(404).json({ error: 'no_playlist_found' });
       } catch (err) {
-        console.error('→ Final fallback search failed:', err.response?.status, err.response?.data || err.message);
         return res.status(500).json({ error: 'server_error' });
       }
     }
@@ -308,8 +333,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const userId = meRes.data.id;
-      console.log('→ Creating playlist for user:', userId);
-  
       const createRes = await axios.post(
         `https://api.spotify.com/v1/users/${userId}/playlists`,
         {
@@ -325,8 +348,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
         }
       );
       const newPlaylistId = createRes.data.id;
-      console.log('→ New playlist ID:', newPlaylistId);
-  
       await axios.post(
         `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
         { uris: trackUris },
@@ -337,10 +358,8 @@ app.post('/api/create-mood-playlist', async (req, res) => {
           }
         }
       );
-  
       return res.json({ playlistId: newPlaylistId });
     } catch (err) {
-      console.error('❌ Error in /api/create-mood-playlist:', err.response?.status, err.response?.data || err.message);
       return res.status(500).json({ error: 'server_error' });
     }
   });

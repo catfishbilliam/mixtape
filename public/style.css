@@ -20,54 +20,22 @@ body {
 }
 
 /* Mood-based background colors */
-body.happy {
-  background: #FFD166;
-}
-body.sad {
-  background: #073B4C;
-}
-body.energetic {
-  background: #EF476F;
-}
-body.chill {
-  background: #06D6A0;
-}
-body.romantic {
-  background: #FF5E5B;
-}
-body.naughty {
-  background: #8E44AD;
-}
-body.whimsical {
-  background: #F39C12;
-}
-body.melancholy {
-  background: #2C3E50;
-}
-body.hopeful {
-  background: #1ABC9C;
-}
-body.lonely {
-  background: #34495E;
-}
-body.angsty {
-  background: #C0392B;
-}
-body.dreamy {
-  background: #9B59B6;
-}
-body.introspective {
-  background: #7F8C8D;
-}
-body.confident {
-  background: #27AE60;
-}
-body.rebellious {
-  background: #E74C3C;
-}
-body.sonder {
-  background: #34495E;
-}
+body.happy        { background: #FFD166; }
+body.sad          { background: #073B4C; }
+body.energetic    { background: #EF476F; }
+body.chill        { background: #06D6A0; }
+body.romantic     { background: #FF5E5B; }
+body.naughty      { background: #8E44AD; }
+body.whimsical    { background: #F39C12; }
+body.melancholy   { background: #2C3E50; }
+body.hopeful      { background: #1ABC9C; }
+body.lonely       { background: #34495E; }
+body.angsty       { background: #C0392B; }
+body.dreamy       { background: #9B59B6; }
+body.introspective{ background: #7F8C8D; }
+body.confident    { background: #27AE60; }
+body.rebellious   { background: #E74C3C; }
+body.sonder       { background: #34495E; }
 
 /* -------------------------------------------
    CONTAINER CARD
@@ -80,6 +48,12 @@ body.sonder {
   max-width: 480px;
   padding: 2rem 1.5rem;
   text-align: center;
+  transition: max-width 0.5s ease; /* smoothly expand when player appears */
+}
+
+/* Once #player has an <iframe>, bump the max-width up */
+.container:has(#player iframe) {
+  max-width: 800px;
 }
 
 /* -------------------------------------------
@@ -214,7 +188,7 @@ button[id$="-btn"]:active {
   padding: 0.5rem;
   position: absolute;
   z-index: 10;
-  bottom: 125%; /* Show above the button */
+  bottom: 125%;
   left: 50%;
   transform: translateX(-50%);
   transition: opacity 0.2s ease;
@@ -226,7 +200,7 @@ button[id$="-btn"]:active {
 .mood-btn .tooltip-text::after {
   content: '';
   position: absolute;
-  top: 100%; /* Arrow at bottom of tooltip */
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
   border-width: 6px;
@@ -260,7 +234,7 @@ button[id$="-btn"]:active {
    ANIMATED VISUAL BACKGROUNDS
 ------------------------------------------- */
 
-/* SUNNY (FLAT COLOR) -- you can keep or remove as desired */
+/* SUNNY (FLAT COLOR) */
 body.sunny {
   background: linear-gradient(to bottom, #fceabb, #f8b500);
 }
