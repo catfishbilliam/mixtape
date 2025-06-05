@@ -22,13 +22,33 @@ async function getGenresForArtists(artistIds) {
 
 async function searchPlaylist(query) {
   if (!query) return null;
-  const res = await fetch(`/api/search-playlist?q=${encodeURIComponent(query)}`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data.playlists || !data.playlists.items || data.playlists.items.length === 0) {
+
+  try {
+    const res = await fetch(`/api/search-playlist?q=${encodeURIComponent(query)}`);
+    if (!res.ok) {
+      console.warn('Search API returned non-ok status:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    const items = (data?.playlists?.items || []).filter(Boolean);
+    if (items.length === 0) {
+      console.warn('No valid playlist items returned.');
+      return null;
+    }
+
+    const firstItem = items[0];
+    if (!firstItem?.id) {
+      console.warn('First playlist item is malformed:', firstItem);
+      return null;
+    }
+
+    return firstItem.id;
+
+  } catch (err) {
+    console.error('searchPlaylist() failed:', err);
     return null;
   }
-  return data.playlists.items[0].id;
 }
 
 function embedPlaylist(playlistId) {
@@ -50,10 +70,8 @@ window.addEventListener('load', () => {
   const logoutBtn = document.getElementById('logout-btn');
   const searchContainer = document.getElementById('search-container');
 
-  // Check authentication by calling /api/top-tracks HEAD
   fetch('/api/top-tracks', { method: 'HEAD' }).then(res => {
     if (res.status === 401) {
-      // Not logged in
       statusEl.textContent = 'Please log in with Spotify to use Mixtape.';
       loginBtn.style.display = 'inline-block';
       logoutBtn.style.display = 'none';
@@ -62,7 +80,6 @@ window.addEventListener('load', () => {
         window.location = '/login';
       });
     } else {
-      // Logged in
       statusEl.textContent = 'Enter a mood to generate a playlist.';
       loginBtn.style.display = 'none';
       logoutBtn.style.display = 'inline-block';
@@ -78,11 +95,9 @@ window.addEventListener('load', () => {
         e.preventDefault();
         statusEl.textContent = 'Building your playlist…';
         const mood = document.getElementById('mood-input').value.trim().toLowerCase();
-
         const artistIds = await getTopSeeds();
         const genres = await getGenresForArtists(artistIds);
         const combined = [mood, ...genres].join(' ');
-
         const playlistId = await searchPlaylist(combined);
         if (playlistId) {
           embedPlaylist(playlistId);
