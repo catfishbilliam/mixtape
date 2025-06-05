@@ -1,4 +1,4 @@
-async function getTopSeeds(token) {
+async function getTopSeeds() {
   const res = await fetch('/api/top-tracks');
   if (!res.ok) return [];
   const data = await res.json();
@@ -25,7 +25,9 @@ async function searchPlaylist(query) {
   const res = await fetch(`/api/search-playlist?q=${encodeURIComponent(query)}`);
   if (!res.ok) return null;
   const data = await res.json();
-  if (!data.playlists || !data.playlists.items.length) return null;
+  if (!data.playlists || !data.playlists.items || data.playlists.items.length === 0) {
+    return null;
+  }
   return data.playlists.items[0].id;
 }
 
@@ -45,21 +47,32 @@ function embedPlaylist(playlistId) {
 window.addEventListener('load', () => {
   const statusEl = document.getElementById('status');
   const loginBtn = document.getElementById('login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
   const searchContainer = document.getElementById('search-container');
 
-  // 1) Check for a cookie named "spotify_token"
+  // Check authentication by calling /api/top-tracks HEAD
   fetch('/api/top-tracks', { method: 'HEAD' }).then(res => {
     if (res.status === 401) {
-      // Not authenticated
+      // Not logged in
       statusEl.textContent = 'Please log in with Spotify to use Mixtape.';
       loginBtn.style.display = 'inline-block';
+      logoutBtn.style.display = 'none';
+      searchContainer.style.display = 'none';
       loginBtn.addEventListener('click', () => {
         window.location = '/login';
       });
     } else {
-      // Authenticated
+      // Logged in
       statusEl.textContent = 'Enter a mood to generate a playlist.';
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = 'inline-block';
       searchContainer.style.display = 'block';
+
+      logoutBtn.addEventListener('click', () => {
+        fetch('/logout').then(() => {
+          window.location.reload();
+        });
+      });
 
       document.getElementById('mood-form').addEventListener('submit', async (e) => {
         e.preventDefault();

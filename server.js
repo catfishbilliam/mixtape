@@ -149,3 +149,13 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// 9. Logout endpoint: clear the Spotify token cookie
+app.get('/logout', (req, res) => {
+    res.clearCookie('spotify_token');
+    res.redirect('/');
+  });
+  
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
