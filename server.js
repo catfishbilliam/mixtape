@@ -130,12 +130,10 @@ app.post('/api/create-mood-playlist', async (req, res) => {
   const validGenres = new Set([
     'pop','indie','rock','hip hop','electronic','classical','jazz','ambient','r&b','country'
   ]);
-
   const extracted = nouns
     .map(w => w.toLowerCase())
     .filter(w => validGenres.has(w))
     .slice(0, 2);
-
   const seedGenres = extracted.length > 0 ? extracted.join(',') : 'pop,indie';
   const targetValence = score > 2 ? 0.8 : score < -2 ? 0.2 : 0.5;
   const targetEnergy = score > 2 ? 0.9 : score < -2 ? 0.3 : 0.5;
@@ -147,7 +145,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       target_valence: String(targetValence),
       target_energy: String(targetEnergy)
     });
-    console.log('Creating playlist with:', { freeText, seedGenres, targetValence, targetEnergy });
     const recRes = await axios.get(
       `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -155,15 +152,13 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     const tracks = recRes.data.tracks || [];
     const trackUris = tracks.map(t => t.uri);
     if (trackUris.length === 0) {
-      console.warn('No tracks found for:', { seedGenres, targetValence, targetEnergy });
-      return res.status(404).json({ error: 'no_tracks_found' });
+      throw new Error('no_tracks_found');
     }
 
     const meRes = await axios.get('https://api.spotify.com/v1/me', {
       headers: { Authorization: `Bearer ${token}` }
     });
     const userId = meRes.data.id;
-    console.log('User ID:', userId);
 
     const createRes = await axios.post(
       `https://api.spotify.com/v1/users/${userId}/playlists`,
@@ -171,7 +166,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
     );
     const newPlaylistId = createRes.data.id;
-    console.log('New playlist ID:', newPlaylistId);
 
     await axios.post(
       `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
@@ -181,7 +175,24 @@ app.post('/api/create-mood-playlist', async (req, res) => {
 
     return res.json({ playlistId: newPlaylistId });
   } catch (err) {
-    console.error('Error creating mood playlist:', err.response?.data || err.message);
+    if (err.message === 'no_tracks_found' || err.response?.status === 404) {
+      try {
+        const spRes = await axios.get(
+          'https://api.spotify.com/v1/search',
+          {
+            params: { q: freeText, type: 'playlist', limit: 1 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const items = spRes.data.playlists?.items || [];
+        if (items.length > 0) {
+          return res.json({ playlistId: items[0].id });
+        }
+        return res.status(404).json({ error: 'no_playlist_found' });
+      } catch {
+        return res.status(500).json({ error: 'server_error' });
+      }
+    }
     return res.status(500).json({ error: 'server_error' });
   }
 });
