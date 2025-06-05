@@ -165,201 +165,234 @@ app.get('/api/search-playlist', async (req, res) => {
 });
 
 app.post('/api/create-mood-playlist', async (req, res) => {
-  const token = getSpotifyToken(req);
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
-
-  const freeText = (req.body.mood || '').trim();
-  if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
-
-  const nowDate = new Date();
-  const hour = nowDate.getHours();
-  const month = nowDate.getMonth();
-
-  let timeOfDay;
-  if (hour < 5 || hour >= 22) timeOfDay = 'night';
-  else if (hour < 12) timeOfDay = 'morning';
-  else if (hour < 17) timeOfDay = 'afternoon';
-  else timeOfDay = 'evening';
-
-  let season;
-  if (month >= 2 && month <= 4) season = 'spring';
-  else if (month >= 5 && month <= 7) season = 'summer';
-  else if (month >= 8 && month <= 10) season = 'fall';
-  else season = 'winter';
-
-  const searchTerms = [freeText, season, timeOfDay].join(' ').toLowerCase();
-
-  let trackUris = [];
-
-  // 1) Category-based search
-  const categories = await loadSpotifyCategories(token);
-  const matchedCategory = categories.find(cat =>
-    searchTerms.includes(cat.name.toLowerCase())
-  );
-  if (matchedCategory) {
+    const token = getSpotifyToken(req);
+    if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  
+    const freeText = (req.body.mood || '').trim();
+    if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
+  
+    // Determine season and time of day
+    const now = new Date();
+    const hour = now.getHours();
+    const month = now.getMonth(); // 0-indexed: Jan = 0
+  
+    let timeOfDay;
+    if (hour < 5 || hour >= 22) timeOfDay = 'night';
+    else if (hour < 12) timeOfDay = 'morning';
+    else if (hour < 17) timeOfDay = 'afternoon';
+    else timeOfDay = 'evening';
+  
+    let season;
+    if (month >= 2 && month <= 4) season = 'spring';
+    else if (month >= 5 && month <= 7) season = 'summer';
+    else if (month >= 8 && month <= 10) season = 'fall';
+    else season = 'winter';
+  
+    const searchTerms = [freeText, season, timeOfDay].join(' ').toLowerCase();
+  
+    let trackUris = [];
+  
+    // 1) CATEGORY-BASED SEARCH (cached for 24h)
     try {
-      const playlistsRes = await axios.get(
-        `https://api.spotify.com/v1/browse/categories/${matchedCategory.id}/playlists`,
-        {
-          params: { country: 'US', limit: 1 },
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-      const items = playlistsRes.data.playlists.items;
-      if (items.length > 0) {
-        const playlistId = items[0].id;
-        const tracksRes = await axios.get(
-          `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-          { headers: { Authorization: `Bearer ${token}` } }
+      const nowTs = Date.now();
+      if (nowTs - categoriesFetchTime > CACHE_DURATION_MS || !cachedCategories.length) {
+        const categoriesRes = await axios.get(
+          'https://api.spotify.com/v1/browse/categories',
+          {
+            params: { country: 'US', limit: 50 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
         );
-        const fetchedTracks = tracksRes.data.items || [];
-        trackUris = fetchedTracks.map(item => item.track.uri).slice(0, 20);
+        cachedCategories = categoriesRes.data.categories.items;
+        categoriesFetchTime = nowTs;
+      }
+      const categories = cachedCategories;
+      const matchedCategory = categories.find(cat =>
+        searchTerms.includes(cat.name.toLowerCase())
+      );
+      if (matchedCategory) {
+        const playlistsRes = await axios.get(
+          `https://api.spotify.com/v1/browse/categories/${matchedCategory.id}/playlists`,
+          {
+            params: { country: 'US', limit: 1 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const items = playlistsRes.data.playlists.items;
+        if (items.length > 0) {
+          const playlistId = items[0].id;
+          const tracksRes = await axios.get(
+            `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const fetchedTracks = tracksRes.data.items || [];
+          trackUris = fetchedTracks.map(item => item.track.uri).slice(0, 20);
+        }
       }
     } catch (err) {
-      console.warn('→ Category-based fetch failed:', err.response?.status);
+      console.warn('→ Category-based search failed:', err.response?.status);
       trackUris = [];
     }
-  }
-
-  // 2) Recommendation-based search using seed genres/artists/tracks
-  if (trackUris.length === 0) {
-    const sentimentResult = sentiment.analyze(freeText);
-    const score = sentimentResult.score;
-    const nouns = nlp(freeText).nouns().out('array');
-
-    const availableSeeds = await loadSeedGenres(token);
-    let extractedSeeds = nouns
-      .map(w => w.toLowerCase().replace(/\s+/g, '-'))
-      .filter(w => availableSeeds.includes(w))
-      .slice(0, 2);
-
-    let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
-    let seedArtists = '';
-    let seedTracks = '';
-
-    if (!seedGenres) {
+  
+    // 2) RECOMMENDATION-BASED SEARCH (if category failed)
+    if (!trackUris.length) {
+      // Sentiment + NLP
+      const sentimentResult = sentiment.analyze(freeText);
+      const score = sentimentResult.score;
+      const nouns = nlp(freeText).nouns().out('array');
+  
+      let extractedSeeds = [];
       try {
-        const topTracksRes = await axios.get(
-          'https://api.spotify.com/v1/me/top/tracks?limit=5',
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const artistIds = topTracksRes.data.items
-          .map(t => t.artists[0].id)
+        const nowTs = Date.now();
+        if (nowTs - seedGenresFetchTime > CACHE_DURATION_MS || !cachedSeedGenres.length) {
+          const seedsRes = await axios.get(
+            'https://api.spotify.com/v1/recommendations/available-genre-seeds',
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          cachedSeedGenres = seedsRes.data.genres;
+          seedGenresFetchTime = nowTs;
+        }
+        const availableSeeds = cachedSeedGenres;
+        extractedSeeds = nouns
+          .map(w => w.toLowerCase().replace(/\s+/g, '-'))
+          .filter(w => availableSeeds.includes(w))
           .slice(0, 2);
-        seedArtists = artistIds.join(',');
-      } catch (_) {
-        seedArtists = '';
+      } catch {
+        extractedSeeds = [];
       }
-    }
-
-    if (!seedGenres && !seedArtists) {
+  
+      let seedGenres = extractedSeeds.length ? extractedSeeds.join(',') : '';
+      let seedArtists = '';
+      let seedTracks = '';
+  
+      if (!seedGenres) {
+        try {
+          const topTracksRes = await axios.get(
+            'https://api.spotify.com/v1/me/top/tracks?limit=5',
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const artistIds = topTracksRes.data.items
+            .map(t => t.artists[0].id)
+            .slice(0, 2);
+          seedArtists = artistIds.join(',');
+        } catch {
+          seedArtists = '';
+        }
+      }
+  
+      if (!seedGenres && !seedArtists) {
+        try {
+          const topTracksRes = await axios.get(
+            'https://api.spotify.com/v1/me/top/tracks?limit=5',
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          seedTracks = topTracksRes.data.items
+            .map(t => t.id)
+            .slice(0, 3)
+            .join(',');
+        } catch {
+          seedTracks = '';
+        }
+      }
+  
+      let targetValence, targetEnergy;
+      if (score >= 3) {
+        targetValence = 0.9;
+        targetEnergy = 0.9;
+      } else if (score > 0) {
+        targetValence = 0.7;
+        targetEnergy = 0.6;
+      } else if (score === 0) {
+        targetValence = 0.5;
+        targetEnergy = 0.4;
+      } else if (score < 0 && score >= -2) {
+        targetValence = 0.3;
+        targetEnergy = 0.3;
+      } else {
+        targetValence = 0.1;
+        targetEnergy = 0.2;
+      }
+  
       try {
-        const topTracksRes = await axios.get(
-          'https://api.spotify.com/v1/me/top/tracks?limit=5',
+        const recParams = new URLSearchParams({
+          limit: '20',
+          target_valence: String(targetValence),
+          target_energy: String(targetEnergy),
+          target_danceability: '0.6',
+          min_popularity: '50'
+        });
+        if (seedGenres) recParams.set('seed_genres', seedGenres);
+        else if (seedArtists) recParams.set('seed_artists', seedArtists);
+        else if (seedTracks) recParams.set('seed_tracks', seedTracks);
+  
+        const recRes = await axios.get(
+          `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        seedTracks = topTracksRes.data.items
-          .map(t => t.id)
-          .slice(0, 3)
-          .join(',');
-      } catch (_) {
-        seedTracks = '';
+        const recTracks = recRes.data.tracks || [];
+        trackUris = recTracks.map(t => t.uri);
+      } catch {
+        trackUris = [];
       }
     }
-
-    let targetValence, targetEnergy;
-    if (score >= 3) {
-      targetValence = 0.9; targetEnergy = 0.9;
-    } else if (score > 0) {
-      targetValence = 0.7; targetEnergy = 0.6;
-    } else if (score === 0) {
-      targetValence = 0.5; targetEnergy = 0.4;
-    } else if (score < 0 && score >= -2) {
-      targetValence = 0.3; targetEnergy = 0.3;
-    } else {
-      targetValence = 0.1; targetEnergy = 0.2;
+  
+    // 3) FINAL PLAYLIST SEARCH FALLBACK
+    if (!trackUris.length) {
+      try {
+        const spRes = await axios.get(
+          'https://api.spotify.com/v1/search',
+          {
+            params: { q: freeText, type: 'playlist', limit: 1 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const playlists = spRes.data.playlists;
+        if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
+          return res.json({ playlistId: playlists.items[0].id });
+        }
+        return res.status(404).json({ error: 'no_playlist_found' });
+      } catch {
+        return res.status(500).json({ error: 'server_error' });
+      }
     }
-
+  
+    // 4) CREATE USER PLAYLIST AND ADD TRACKS
     try {
-      const recParams = new URLSearchParams({
-        limit: '20',
-        target_valence: String(targetValence),
-        target_energy: String(targetEnergy),
-        target_danceability: '0.6',
-        min_popularity: '50'
-      });
-      if (seedGenres) recParams.set('seed_genres', seedGenres);
-      else if (seedArtists) recParams.set('seed_artists', seedArtists);
-      else if (seedTracks) recParams.set('seed_tracks', seedTracks);
-
-      const recRes = await axios.get(
-        `https://api.spotify.com/v1/recommendations?${recParams.toString()}`,
+      const meRes = await axios.get(
+        'https://api.spotify.com/v1/me',
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const recTracks = recRes.data.tracks || [];
-      trackUris = recTracks.map(t => t.uri);
-    } catch (_) {
-      trackUris = [];
-    }
-  }
-
-  // 3) Final fallback: search for a playlist by freeText
-  if (trackUris.length === 0) {
-    try {
-      const spRes = await axios.get(
-        'https://api.spotify.com/v1/search',
+      const userId = meRes.data.id;
+      const createRes = await axios.post(
+        `https://api.spotify.com/v1/users/${userId}/playlists`,
         {
-          params: { q: freeText, type: 'playlist', limit: 1 },
-          headers: { Authorization: `Bearer ${token}` }
+          name: `Mixtape - ${freeText}`,
+          description: `Your ${freeText} playlist`,
+          public: false
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
       );
-      const playlists = spRes.data.playlists;
-      if (playlists && Array.isArray(playlists.items) && playlists.items.length > 0) {
-        return res.json({ playlistId: playlists.items[0].id });
-      }
-      return res.status(404).json({ error: 'no_playlist_found' });
-    } catch (err) {
+      const newPlaylistId = createRes.data.id;
+      await axios.post(
+        `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
+        { uris: trackUris },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return res.json({ playlistId: newPlaylistId });
+    } catch {
       return res.status(500).json({ error: 'server_error' });
     }
-  }
-
-  // 4) Create a private playlist and add the found tracks
-  try {
-    const meRes = await axios.get(
-      'https://api.spotify.com/v1/me',
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const userId = meRes.data.id;
-    const createRes = await axios.post(
-      `https://api.spotify.com/v1/users/${userId}/playlists`,
-      {
-        name: `Mixtape - ${freeText}`,
-        description: `Your ${freeText} playlist`,
-        public: false
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    const newPlaylistId = createRes.data.id;
-    await axios.post(
-      `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
-      { uris: trackUris },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    return res.json({ playlistId: newPlaylistId });
-  } catch (err) {
-    return res.status(500).json({ error: 'server_error' });
-  }
-});
+  });
 
 app.get('/logout', (req, res) => {
   res.clearCookie('spotify_token');
