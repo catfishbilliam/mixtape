@@ -20,43 +20,38 @@ async function getGenresForArtists(artistIds) {
   return [...new Set(genres)].slice(0, 5);
 }
 
-async function createMoodPlaylist(mood) {
+async function createMoodPlaylist(moodText) {
   const res = await fetch('/api/create-mood-playlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mood })
+    body: JSON.stringify({ mood: moodText })
   });
   if (!res.ok) return null;
-  const { playlistId } = await res.json();
-  return playlistId;
+  const data = await res.json();
+  return data.playlistId;
 }
 
-async function handleMoodSelection(mood) {
-  const statusEl = document.getElementById('status');
-  statusEl.textContent = 'Building your custom playlist…';
-  updateBackground(mood);
-
-  const playlistId = await createMoodPlaylist(mood);
-  if (playlistId) {
-    embedPlaylist(playlistId);
-    statusEl.textContent = `Your “${mood}” playlist is ready`;
-  } else {
-    embedPlaylist(null);
-    statusEl.textContent = 'Could not build playlist. Try again.';
-  }
+function embedPlaylist(playlistId) {
+  const container = document.getElementById('player');
+  container.innerHTML = '';
+  if (!playlistId) return;
+  const iframe = document.createElement('iframe');
+  iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
+  iframe.allow = 'encrypted-media';
+  iframe.width = '100%';
+  iframe.height = '380';
+  iframe.frameBorder = '0';
+  container.appendChild(iframe);
 }
 
 function clearVisuals() {
-  document.body.classList.remove(
-    'rainy', 'snowy', 'sunny', 'night', 'party'
-  );
+  document.body.classList.remove('rainy', 'snowy', 'sunny', 'night', 'party');
   document.querySelectorAll('.raindrop, .snowflake').forEach(el => el.remove());
 }
 
 function setVisualEffects(vis) {
   clearVisuals();
   document.body.classList.add(vis);
-
   if (vis === 'rainy') {
     for (let i = 0; i < 100; i++) {
       const drop = document.createElement('div');
@@ -85,12 +80,11 @@ function setVisualEffects(vis) {
 }
 
 function updateBackground(mood) {
-  // Map each mood to one of the animated classes
   const mapToVisual = {
     happy: 'sunny',
     sad: 'rainy',
     energetic: 'party',
-    chill: 'snowy',         // e.g. “chill” shows snow
+    chill: 'snowy',
     romantic: 'night',
     naughty: 'party',
     whimsical: 'sunny',
@@ -157,13 +151,10 @@ async function handleMoodSelection(mood) {
   const statusEl = document.getElementById('status');
   statusEl.textContent = 'Building your playlist…';
   updateBackground(mood);
-  const artistIds = await getTopSeeds();
-  const genres = await getGenresForArtists(artistIds);
-  const combined = [mood, ...genres].join(' ');
-  const playlistId = await searchPlaylist(combined);
+  const playlistId = await createMoodPlaylist(mood);
   if (playlistId) {
     embedPlaylist(playlistId);
-    statusEl.textContent = `Playlist for “${mood}” (${genres.join(', ')})`;
+    statusEl.textContent = `Your “${mood}” playlist is ready`;
   } else {
     embedPlaylist(null);
     statusEl.textContent = 'No matching playlist found. Try another mood.';
