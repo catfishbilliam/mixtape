@@ -242,21 +242,40 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     }
   
     if (trackUris.length === 0) {
-      console.log('→ Falling back to track-search for:', freeText);
+      console.log('→ Falling back to category-based search for:', freeText);
       try {
-        const trackSearchRes = await axios.get(
-          'https://api.spotify.com/v1/search',
+        const categoriesRes = await axios.get(
+          'https://api.spotify.com/v1/browse/categories',
           {
-            params: { q: freeText, type: 'track', limit: 10 },
+            params: { country: 'US', limit: 50 },
             headers: { Authorization: `Bearer ${token}` }
           }
         );
-        const foundTracks = trackSearchRes.data.tracks?.items || [];
-        if (foundTracks.length > 0) {
-          trackUris = foundTracks.map(t => t.uri);
+        const categories = categoriesRes.data.categories.items;
+        const matchedCategory = categories.find(c =>
+          c.name.toLowerCase().includes(freeText.toLowerCase())
+        );
+        if (matchedCategory) {
+          const playlistsRes = await axios.get(
+            `https://api.spotify.com/v1/browse/categories/${matchedCategory.id}/playlists`,
+            {
+              params: { country: 'US', limit: 1 },
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+          const items = playlistsRes.data.playlists.items;
+          if (items.length > 0) {
+            const playlistId = items[0].id;
+            const tracksRes = await axios.get(
+              `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const fetchedTracks = tracksRes.data.items || [];
+            trackUris = fetchedTracks.map(item => item.track.uri).slice(0, 20);
+          }
         }
       } catch (err) {
-        console.warn('→ Track search failed:', err.response?.status);
+        console.warn('→ Category-based search failed:', err.response?.status);
         trackUris = [];
       }
     }
