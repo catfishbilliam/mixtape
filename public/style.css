@@ -49,6 +49,7 @@ body.sonder       { background: #34495E; }
   padding: 2rem 1.5rem;
   text-align: center;
   transition: max-width 0.5s ease; /* smoothly expand when player appears */
+  margin: 20px;
 }
 
 /* Once #player has an <iframe>, bump the max-width up */
