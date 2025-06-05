@@ -141,21 +141,21 @@ app.get('/api/search-playlist', async (req, res) => {
   }
 });
 
+// … all your other routes above …
+
 // 8. Catch-all: serve index.html for any other route (SPA)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-// 9. Logout endpoint: clear the Spotify token cookie
-app.get('/logout', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public/index.html'));
+  });
+  
+  // 9. Logout endpoint: clear the Spotify token cookie
+  app.get('/logout', (req, res) => {
     res.clearCookie('spotify_token');
     res.redirect('/');
   });
   
+  // Only one listen() call at the very end:
+  const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
