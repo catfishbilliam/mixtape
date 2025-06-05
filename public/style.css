@@ -7,6 +7,7 @@
   box-sizing: border-box;
 }
 
+/* Base body styling and smooth background transitions */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: #0e0e0e;
@@ -15,6 +16,57 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  transition: background 0.5s ease;
+}
+
+/* Mood-based background colors */
+body.happy {
+  background: #FFD166;
+}
+body.sad {
+  background: #073B4C;
+}
+body.energetic {
+  background: #EF476F;
+}
+body.chill {
+  background: #06D6A0;
+}
+body.romantic {
+  background: #FF5E5B;
+}
+body.naughty {
+  background: #8E44AD;
+}
+body.whimsical {
+  background: #F39C12;
+}
+body.melancholy {
+  background: #2C3E50;
+}
+body.hopeful {
+  background: #1ABC9C;
+}
+body.lonely {
+  background: #34495E;
+}
+body.angsty {
+  background: #C0392B;
+}
+body.dreamy {
+  background: #9B59B6;
+}
+body.introspective {
+  background: #7F8C8D;
+}
+body.confident {
+  background: #27AE60;
+}
+body.rebellious {
+  background: #E74C3C;
+}
+body.sonder {
+  background: #34495E;
 }
 
 /* -------------------------------------------
@@ -119,6 +171,76 @@ button[id$="-btn"]:active {
 }
 
 /* -------------------------------------------
+   MOOD BUTTONS + TOOLTIP
+------------------------------------------- */
+#mood-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.mood-btn {
+  position: relative;
+  background: #555;
+  border: none;
+  border-radius: 50px;
+  color: #fff;
+  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.mood-btn:hover {
+  background: #777;
+  transform: translateY(-2px);
+}
+
+.mood-btn:active {
+  transform: translateY(0);
+}
+
+/* Tooltip text (hidden by default) */
+.mood-btn .tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  width: 180px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 0.5rem;
+  position: absolute;
+  z-index: 10;
+  bottom: 125%; /* Show above the button */
+  left: 50%;
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+/* Tooltip arrow */
+.mood-btn .tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%; /* Arrow at bottom of tooltip */
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+}
+
+/* Show tooltip on hover */
+.mood-btn:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* -------------------------------------------
    SPOTIFY PLAYER EMBED
 ------------------------------------------- */
 #player {
@@ -135,6 +257,69 @@ button[id$="-btn"]:active {
 }
 
 /* -------------------------------------------
+   ANIMATED VISUAL BACKGROUNDS
+------------------------------------------- */
+
+/* SUNNY (FLAT COLOR) -- you can keep or remove as desired */
+body.sunny {
+  background: linear-gradient(to bottom, #fceabb, #f8b500);
+}
+
+/* RAINY */
+body.rainy {
+  background: #2c3e50;
+  overflow: hidden;
+}
+.raindrop {
+  position: absolute;
+  top: -20px;
+  width: 2px;
+  background: rgba(173, 216, 230, 0.7);
+  animation: fallRain linear infinite;
+}
+@keyframes fallRain {
+  to { transform: translateY(100vh); }
+}
+
+/* SNOWY */
+body.snowy {
+  background: #1b1b1b;
+  overflow: hidden;
+}
+.snowflake {
+  position: absolute;
+  top: -10px;
+  background: white;
+  border-radius: 50%;
+  opacity: 0.8;
+  animation: fallSnow linear infinite;
+}
+@keyframes fallSnow {
+  to { transform: translateY(100vh); }
+}
+
+/* NIGHT (JUST A DARK FLAT COLOR) */
+body.night {
+  background: #0d0d0d;
+}
+
+/* PARTY (RADIAL GRADIENT) */
+body.party {
+  background: radial-gradient(circle, #ff4b1f 0%, #1fddff 100%);
+}
+
+/* OPTIONAL: scrollbar tweaks when animating */
+body.rainy::-webkit-scrollbar,
+body.snowy::-webkit-scrollbar {
+  width: 6px;
+}
+body.rainy::-webkit-scrollbar-thumb,
+body.snowy::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+/* -------------------------------------------
    RESPONSIVE ADJUSTMENTS
 ------------------------------------------- */
 @media (max-width: 420px) {
@@ -148,7 +333,8 @@ button[id$="-btn"]:active {
     font-size: 0.9rem;
   }
   #mood-input,
-  #mood-form button {
+  #mood-form button,
+  .mood-btn {
     font-size: 0.9rem;
     padding: 0.6rem 0.8rem;
   }

@@ -22,31 +22,16 @@ async function getGenresForArtists(artistIds) {
 
 async function searchPlaylist(query) {
   if (!query) return null;
-
   try {
     const res = await fetch(`/api/search-playlist?q=${encodeURIComponent(query)}`);
-    if (!res.ok) {
-      console.warn('Search API returned non-ok status:', res.status);
-      return null;
-    }
-
+    if (!res.ok) return null;
     const data = await res.json();
-    const items = (data?.playlists?.items || []).filter(Boolean);
-    if (items.length === 0) {
-      console.warn('No valid playlist items returned.');
-      return null;
-    }
-
+    const items = data?.playlists?.items;
+    if (!Array.isArray(items) || items.length === 0) return null;
     const firstItem = items[0];
-    if (!firstItem?.id) {
-      console.warn('First playlist item is malformed:', firstItem);
-      return null;
-    }
-
+    if (!firstItem || typeof firstItem !== 'object' || !firstItem.id) return null;
     return firstItem.id;
-
   } catch (err) {
-    console.error('searchPlaylist() failed:', err);
     return null;
   }
 }
@@ -64,11 +49,74 @@ function embedPlaylist(playlistId) {
   container.appendChild(iframe);
 }
 
+function clearVisuals() {
+  document.body.classList.remove(
+    'rainy', 'snowy', 'sunny', 'night', 'party'
+  );
+  document.querySelectorAll('.raindrop, .snowflake').forEach(el => el.remove());
+}
+
+function setVisualEffects(vis) {
+  clearVisuals();
+  document.body.classList.add(vis);
+
+  if (vis === 'rainy') {
+    for (let i = 0; i < 100; i++) {
+      const drop = document.createElement('div');
+      drop.className = 'raindrop';
+      drop.style.left = Math.random() * 100 + 'vw';
+      drop.style.animationDuration = 0.5 + Math.random() * 0.5 + 's';
+      drop.style.animationDelay = Math.random() * 2 + 's';
+      drop.style.height = 10 + Math.random() * 20 + 'px';
+      drop.style.opacity = 0.2 + Math.random() * 0.5;
+      document.body.appendChild(drop);
+    }
+  } else if (vis === 'snowy') {
+    for (let i = 0; i < 50; i++) {
+      const flake = document.createElement('div');
+      flake.className = 'snowflake';
+      const size = 5 + Math.random() * 10;
+      flake.style.width = size + 'px';
+      flake.style.height = size + 'px';
+      flake.style.left = Math.random() * 100 + 'vw';
+      flake.style.animationDuration = 2 + Math.random() * 2 + 's';
+      flake.style.animationDelay = Math.random() * 3 + 's';
+      flake.style.opacity = 0.5 + Math.random() * 0.5;
+      document.body.appendChild(flake);
+    }
+  }
+}
+
+function updateBackground(mood) {
+  // Map each mood to one of the animated classes
+  const mapToVisual = {
+    happy: 'sunny',
+    sad: 'rainy',
+    energetic: 'party',
+    chill: 'snowy',         // e.g. “chill” shows snow
+    romantic: 'night',
+    naughty: 'party',
+    whimsical: 'sunny',
+    melancholy: 'rainy',
+    hopeful: 'sunny',
+    lonely: 'night',
+    angsty: 'rainy',
+    dreamy: 'night',
+    introspective: 'night',
+    confident: 'sunny',
+    rebellious: 'party',
+    sonder: 'night'
+  };
+  const visClass = mapToVisual[mood] || 'sunny';
+  setVisualEffects(visClass);
+}
+
 window.addEventListener('load', () => {
   const statusEl = document.getElementById('status');
   const loginBtn = document.getElementById('login-btn');
   const logoutBtn = document.getElementById('logout-btn');
   const searchContainer = document.getElementById('search-container');
+  const moodButtons = document.querySelectorAll('.mood-btn');
 
   fetch('/api/top-tracks', { method: 'HEAD' }).then(res => {
     if (res.status === 401) {
@@ -80,7 +128,7 @@ window.addEventListener('load', () => {
         window.location = '/login';
       });
     } else {
-      statusEl.textContent = 'Enter a mood to generate a playlist.';
+      statusEl.textContent = 'Pick a mood or enter your own!';
       loginBtn.style.display = 'none';
       logoutBtn.style.display = 'inline-block';
       searchContainer.style.display = 'block';
@@ -93,20 +141,34 @@ window.addEventListener('load', () => {
 
       document.getElementById('mood-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        statusEl.textContent = 'Building your playlist…';
         const mood = document.getElementById('mood-input').value.trim().toLowerCase();
-        const artistIds = await getTopSeeds();
-        const genres = await getGenresForArtists(artistIds);
-        const combined = [mood, ...genres].join(' ');
-        const playlistId = await searchPlaylist(combined);
-        if (playlistId) {
-          embedPlaylist(playlistId);
-          statusEl.textContent = `Playlist for “${mood}” (${genres.join(', ')})`;
-        } else {
-          embedPlaylist(null);
-          statusEl.textContent = 'No matching playlist found. Try another mood.';
-        }
+        await handleMoodSelection(mood);
+      });
+
+      moodButtons.forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const mood = btn.dataset.mood;
+          document.getElementById('mood-input').value = mood;
+          await handleMoodSelection(mood);
+        });
       });
     }
   });
 });
+
+async function handleMoodSelection(mood) {
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'Building your playlist…';
+  updateBackground(mood);
+  const artistIds = await getTopSeeds();
+  const genres = await getGenresForArtists(artistIds);
+  const combined = [mood, ...genres].join(' ');
+  const playlistId = await searchPlaylist(combined);
+  if (playlistId) {
+    embedPlaylist(playlistId);
+    statusEl.textContent = `Playlist for “${mood}” (${genres.join(', ')})`;
+  } else {
+    embedPlaylist(null);
+    statusEl.textContent = 'No matching playlist found. Try another mood.';
+  }
+}
