@@ -142,16 +142,6 @@ app.post('/api/create-mood-playlist', async (req, res) => {
     const freeText = (req.body.mood || '').trim();
     if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
   
-    let userGenres = [];
-    try {
-      const topArtistsRes = await axios.get('https://api.spotify.com/v1/me/top/artists?limit=10', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      userGenres = topArtistsRes.data.items.flatMap(a => a.genres).slice(0, 10);
-    } catch (_) {
-      userGenres = [];
-    }
-  
     try {
       const allMoodsRes = await axios.get(
         'https://api.spotify.com/v1/browse/categories/mood/playlists',
@@ -161,10 +151,9 @@ app.post('/api/create-mood-playlist', async (req, res) => {
         }
       );
       const moodPlaylists = allMoodsRes.data.playlists.items;
-      const pick = moodPlaylists.find(p => {
-        const lower = p.name.toLowerCase();
-        return lower.includes(freeText.toLowerCase()) || userGenres.some(g => lower.includes(g));
-      });
+      const pick = moodPlaylists.find(p =>
+        p.name.toLowerCase().includes(freeText.toLowerCase())
+      );
       if (pick) {
         return res.json({ playlistId: pick.id });
       }
@@ -248,12 +237,32 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       trackUris = tracks.map(t => t.uri);
       console.log('→ Recommendations count:', trackUris.length);
     } catch (err) {
-      console.warn('→ Recommendations failed (fallback to search):', err.response?.status);
+      console.warn('→ Recommendations failed:', err.response?.status);
       trackUris = [];
     }
   
     if (trackUris.length === 0) {
-      console.log('→ Falling back to search-playlist for:', freeText);
+      console.log('→ Falling back to track-search for:', freeText);
+      try {
+        const trackSearchRes = await axios.get(
+          'https://api.spotify.com/v1/search',
+          {
+            params: { q: freeText, type: 'track', limit: 10 },
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        const foundTracks = trackSearchRes.data.tracks?.items || [];
+        if (foundTracks.length > 0) {
+          trackUris = foundTracks.map(t => t.uri);
+        }
+      } catch (err) {
+        console.warn('→ Track search failed:', err.response?.status);
+        trackUris = [];
+      }
+    }
+  
+    if (trackUris.length === 0) {
+      console.log('→ Final fallback to playlist-search for:', freeText);
       try {
         const spRes = await axios.get(
           'https://api.spotify.com/v1/search',
@@ -269,7 +278,7 @@ app.post('/api/create-mood-playlist', async (req, res) => {
         }
         return res.status(404).json({ error: 'no_playlist_found' });
       } catch (err) {
-        console.error('→ Fallback search failed:', err.response?.status, err.response?.data || err.message);
+        console.error('→ Final fallback search failed:', err.response?.status, err.response?.data || err.message);
         return res.status(500).json({ error: 'server_error' });
       }
     }
