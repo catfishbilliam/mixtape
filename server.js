@@ -139,8 +139,8 @@ app.get('/api/search-playlist', async (req, res) => {
 app.post('/api/create-mood-playlist', async (req, res) => {
     const token = getSpotifyToken(req);
     if (!token) return res.status(401).json({ error: 'Not authenticated' });
-  
     const freeText = (req.body.mood || '').trim();
+    const clientGenres = req.body.genres || [];
     if (!freeText) return res.status(400).json({ error: 'Missing mood text' });
   
     try {
@@ -168,6 +168,14 @@ app.post('/api/create-mood-playlist', async (req, res) => {
       .map(w => w.toLowerCase().replace(/\s+/g, '-'))
       .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
       .slice(0, 2);
+  
+    if (extractedSeeds.length < 2 && Array.isArray(clientGenres)) {
+      extractedSeeds.push(...clientGenres
+        .map(w => w.toLowerCase().replace(/\s+/g, '-'))
+        .filter(w => VALID_SPOTIFY_SEEDS.includes(w))
+        .slice(0, 2 - extractedSeeds.length));
+    }
+  
     let seedGenres = extractedSeeds.length > 0 ? extractedSeeds.join(',') : '';
     let seedArtists = '';
     let seedTracks = '';
